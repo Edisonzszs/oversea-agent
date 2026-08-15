@@ -28,10 +28,11 @@ npm run build    # vite build → outDir=dist-prod（不是 dist！见坑①）
 | ① | E 盘 exFAT 曾损坏 `dist/` 目录项（delete/rename 报 access denied） | build outDir 固定为 `dist-prod`（vite.config.ts 注释有说明），勿改回 dist |
 | ② | E 盘偶发掉盘（errno -4094） | `Get-PSDrive` 查 E: 是否在；重连后文件都在，重启 dev server 即可 |
 | ③ | 根目录堆了 20+ 个历史 `dist-*` 构建目录 | 全部已 gitignore（`dist-*/`），别误提交 |
+| ④ | 本机网络对 `github.com:443` 间歇不可达（`api.github.com` 正常，gh 命令不受影响） | git push 报 connect timeout 时：remote 已配 ssh 备用协议 `git@github.com:Edisonzszs/oversea-agent.git`，等几分钟重试或直接 `git push`（当前 remote 即 ssh）；https 失效时可 `git remote set-url origin git@github.com:Edisonzszs/oversea-agent.git` |
 
 ## 三、GitHub 版本管理
 
-- **仓库**：https://github.com/Edisonzszs/oversea-agent（`gh` 已登录 Edisonzszs，git 身份已配）
+- **仓库**：https://github.com/Edisonzszs/oversea-agent（`gh` 已登录 Edisonzszs，git 身份已配；remote 用 **ssh 协议** `git@github.com:Edisonzszs/oversea-agent.git`，见坑④）
 - **分支**：`main` = 最新源码。日常：`git add -A && git commit -m "feat: xxx" && git push`
 - **版本下载**（每种只有两种，**不出便携版**——用户已确认）：
   - `chuhai-deploy-*.zip` —— 服务器部署包（Release 附件）
