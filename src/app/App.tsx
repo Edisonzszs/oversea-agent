@@ -169,16 +169,19 @@ export default function App() {
     setMode("compliance");
   };
 
+  // 去完整版:匿名/登录都直接开始(照《企业合规自查流程.txt》,匿名项目存本机)。
   const handleVersionFull = () => {
     setShowVersionModal(false);
-    if (isAuthed) {
-      // 完整版:进入现有"新建合规自查项目"弹窗(输入项目名)
-      setShowNewComplianceModal(true);
-    } else {
-      // 匿名:去登录,登录成功后回合规空间并重新弹(登录版)选择弹窗
-      setPendingComplianceEntry(true);
-      setMode("login");
-    }
+    setQuickTestActive(false);
+    setMode("compliance");
+    setShowNewComplianceModal(true);
+  };
+
+  // 匿名版弹窗「立即登录」:去登录页,登录成功后回合规空间并弹(登录版)选择弹窗。
+  const handleVersionLogin = () => {
+    setShowVersionModal(false);
+    setPendingComplianceEntry(true);
+    setMode("login");
   };
 
   // 登录成功:若是从"完整版→去登录"来,回合规空间并弹登录版选择弹窗;否则回首页。
@@ -366,6 +369,7 @@ export default function App() {
           onClose={() => setShowVersionModal(false)}
           onQuickTest={handleQuickTest}
           onFull={handleVersionFull}
+          onLogin={handleVersionLogin}
         />
       )}
       {!topCollapsed && (

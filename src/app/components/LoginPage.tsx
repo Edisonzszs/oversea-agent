@@ -1,27 +1,23 @@
-// 登录页 —— 全屏左右分栏(照「用户登陆界面.png」)。
-// 左 60% 品牌宣传区(插画 + slogan + 特性),右 40% 登录表单(手机号登录 / 法人一证通登录 双 tab)。
-// POC 红线:手机号 + 任意密码 + 验证码(自动填 1234)即登录成功;法人一证通 mock 直接登录;
-// 不接真实后端、不持有真实凭证、不发起网络请求。
+// 登录页 —— 照「用户登陆界面.png」:全屏渐变蓝背景(浅蓝→#1890FF)+底部城市剪影,
+// 居中白色卡片:欢迎登录 + 返回 / 手机号 / 短信验证码(自动填 1234) / 登录 / 协议勾选 / 一网通办。
+// POC 红线:手机号 + 验证码(自动填)即登录成功,不接真实后端;本版不做法人一证通。
 
-import { useState, useRef, useEffect } from "react";
-import type { AuthUser } from "../auth/useAuth";
-import { phoneToName } from "../auth/useAuth";
+import { useState, useEffect, useRef } from "react";
+import { phoneToName, type AuthUser } from "../auth/useAuth";
+
+const BLUE = "#1890ff";
+const BLUE_DEEP = "#096dd9";
+const TITLE_NAVY = "#1f3a8a";
 
 interface Props {
   onLogin: (user: AuthUser) => void;
   onBack: () => void;
 }
 
-const NAVY = "#3B5099";
-const NAVY_DARK = "#28356B";
-
-type Tab = "phone" | "legal";
-
 export function LoginPage({ onLogin, onBack }: Props) {
-  const [tab, setTab] = useState<Tab>("phone");
   const [phone, setPhone] = useState("");
-  const [pwd, setPwd] = useState("");
   const [code, setCode] = useState("");
+  const [agree, setAgree] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -37,157 +33,133 @@ export function LoginPage({ onLogin, onBack }: Props) {
     }, 1000);
   };
 
-  const loginByPhone = () => {
+  const canLogin = /^\d{11}$/.test(phone) && code.trim().length > 0 && agree;
+
+  const doLogin = () => {
     if (!/^\d{11}$/.test(phone)) { alert("请输入 11 位手机号"); return; }
-    if (!pwd.trim()) { alert("请输入密码"); return; }
-    if (!code.trim()) { alert("请输入验证码"); return; }
+    if (!code.trim()) { alert("请输入短信验证码"); return; }
+    if (!agree) { alert("请先阅读并同意《用户服务协议》和《隐私政策》"); return; }
     onLogin({ userName: phoneToName(phone), userType: "法人", certStatus: "已认证", phone: phoneToName(phone) });
   };
 
-  const loginByLegal = () => {
-    // POC:法人一证通 mock——真实流程需插入 USB Key 走 CA,这里直接登录。
-    onLogin({ userName: "上海三一集团", userType: "法人", certStatus: "已认证", orgName: "上海三一集团" });
-  };
-
   return (
-    <div style={{ position: "fixed", inset: 0, display: "flex", background: "#fff", fontFamily: '"Microsoft YaHei","PingFang SC",sans-serif' }}>
-      {/* ── 左 60% 品牌宣传区 ── */}
-      <div style={{ flex: "0 0 60%", position: "relative", background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY_DARK} 100%)`, color: "#fff", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 7%" }}>
-        {/* 装饰:抽象出海/连接图样 */}
-        <DecoArt />
-        <div style={{ position: "relative", zIndex: 2 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-            <GlobeLogo />
-            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: 1 }}>出海合规智能体</span>
-          </div>
-          <h1 style={{ fontSize: 40, fontWeight: 800, lineHeight: 1.3, margin: "0 0 16px" }}>
-            企业境外投资(ODI)<br />合规自查 · 智能伴填
-          </h1>
-          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.82)", lineHeight: 1.8, margin: "0 0 40px", maxWidth: 460 }}>
-            上海市企业走出去综合服务平台 · 依托商务部令 2014 年第 3 号、发改委令第 11 号、国务院令第 837 号等法源,为企业境外投资提供合规自查与材料准备辅导。
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Feature text="匿名速测 · 10–15 分钟初判合规档位" />
-            <Feature text="登录完整自查 · 文件齐备度计分 + 报告保存" />
-            <Feature text="小海伴填 · 法规依据可溯源,口径要点非逐字条文" />
-          </div>
+    <div style={{ position: "fixed", inset: 0, background: `linear-gradient(135deg, #E6F7FF 0%, ${BLUE} 100%)`, fontFamily: '"Microsoft YaHei","PingFang SC",sans-serif', overflow: "hidden" }}>
+      {/* 底部城市天际线剪影(低饱和半透明) */}
+      <CityScape />
+
+      {/* 居中白色登录卡片 */}
+      <div style={{ position: "relative", width: 400, maxWidth: "92%", margin: "0 auto", top: "50%", transform: "translateY(-54%)", background: "#fff", borderRadius: 8, boxShadow: "0 8px 32px rgba(9,64,127,0.18)", padding: "34px 36px 28px" }}>
+        {/* 头部:标题 + 返回 */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 26 }}>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: TITLE_NAVY }}>欢迎登录</h1>
+          <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", fontSize: 14, display: "flex", alignItems: "center", gap: 4, padding: 4 }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#555")} onMouseLeave={e => (e.currentTarget.style.color = "#999")}>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            返回
+          </button>
         </div>
-        <div style={{ position: "absolute", bottom: 28, left: "7%", right: "7%", zIndex: 2, fontSize: 12, color: "rgba(255,255,255,0.5)", display: "flex", justifyContent: "space-between" }}>
-          <span>上海市商务委员会 · 中国(上海)自由贸易试验区</span>
-          <span>© 2026 出海合规智能体</span>
+
+        {/* 手机号 */}
+        <InputRow icon="phone">
+          <input value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ""))} placeholder="请输入手机号" type="tel" maxLength={11}
+            style={inputStyle} />
+        </InputRow>
+
+        {/* 验证码 + 获取按钮 */}
+        <InputRow icon="shield" style={{ marginBottom: 4 }}>
+          <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} placeholder="请输入短信验证码" type="tel" maxLength={6}
+            style={{ ...inputStyle, border: "none", padding: 0, flex: 1 }} />
+          <button onClick={sendCode} disabled={countdown > 0}
+            style={{ background: "none", border: "none", cursor: countdown > 0 ? "default" : "pointer", color: countdown > 0 ? "#bbb" : BLUE, fontSize: 13.5, fontWeight: 500, whiteSpace: "nowrap", padding: "4px 0 4px 10px" }}>
+            {countdown > 0 ? `重新获取(${countdown}s)` : "获取验证码"}
+          </button>
+        </InputRow>
+
+        {/* 登录按钮(未勾协议置灰) */}
+        <button onClick={doLogin} disabled={!canLogin}
+          style={{ width: "100%", height: 46, marginTop: 22, border: "none", borderRadius: 6, background: canLogin ? BLUE : "#b4d6f5", color: "#fff", fontSize: 16, fontWeight: 700, letterSpacing: 6, cursor: canLogin ? "pointer" : "default", transition: "background .15s" }}
+          onMouseEnter={e => { if (canLogin) e.currentTarget.style.background = BLUE_DEEP; }} onMouseLeave={e => { if (canLogin) e.currentTarget.style.background = BLUE; }}>
+          登　录
+        </button>
+
+        {/* 协议勾选 */}
+        <div style={{ marginTop: 14, display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "#666", lineHeight: 1.6, cursor: "pointer", userSelect: "none" }} onClick={() => setAgree(v => !v)}>
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${agree ? BLUE : "#d9d9d9"}`, background: agree ? BLUE : "#fff", flexShrink: 0, marginTop: 2 }}>
+            {agree && <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 6.5l2.6 2.6L10 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+          </span>
+          <span>我已阅读并同意<span style={{ color: BLUE }}>《用户服务协议》</span>和<span style={{ color: BLUE }}>《隐私政策》</span></span>
         </div>
+
+        {/* 其他登录方式 */}
+        <div style={{ marginTop: 26, textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: "#999", marginBottom: 10 }}>其他登录方式</div>
+          <button onClick={() => alert("一网通办登录 POC 暂未开通，请使用手机号验证码登录")}
+            style={{ width: "100%", height: 42, border: "none", borderRadius: 6, background: "#f0f0f0", color: BLUE, fontSize: 14, fontWeight: 500, cursor: "pointer", transition: "background .15s" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#e6f7ff")} onMouseLeave={e => (e.currentTarget.style.background = "#f0f0f0")}>一网通办登录</button>
+        </div>
+
+        {/* POC 演示提示 */}
+        <p style={{ margin: "18px 0 0", fontSize: 11.5, color: "#c3cdd9", textAlign: "center" }}>POC 演示：任意 11 位手机号 + 验证码（点击「获取验证码」自动填 1234）</p>
       </div>
+    </div>
+  );
+}
 
-      {/* ── 右 40% 登录表单区 ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "0 8%", background: "#F7F9FC" }}>
-        <div style={{ width: "100%", maxWidth: 380 }}>
-          <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 13, padding: "0 0 18px", display: "flex", alignItems: "center", gap: 6 }}>← 返回首页</button>
+// ─── 输入行(左图标 + 内容) ───────────────────────────────────────────────
+const inputStyle: React.CSSProperties = {
+  width: "100%", height: 42, border: "1px solid #e5e5e5", borderRadius: 4,
+  padding: "0 14px", fontSize: 14, color: "#333", outline: "none", background: "#fff",
+};
 
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: "#1f2937", margin: "0 0 6px" }}>欢迎登录</h2>
-          <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 24px" }}>登录后可使用完整版自查、保存进度与生成报告</p>
-
-          {/* 双 tab */}
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: 24 }}>
-            {([["phone", "手机号登录"], ["legal", "法人一证通登录"]] as [Tab, string][]).map(([k, label]) => (
-              <button key={k} onClick={() => setTab(k)} style={{ flex: 1, padding: "12px 0", background: "none", border: "none", borderBottom: tab === k ? `2px solid ${NAVY}` : "2px solid transparent", color: tab === k ? NAVY : "#94a3b8", fontSize: 14.5, fontWeight: tab === k ? 600 : 400, cursor: "pointer", marginBottom: -1 }}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {tab === "phone" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Field icon="phone" value={phone} onChange={setPhone} placeholder="请输入手机号" maxLength={11} type="tel" />
-              <Field icon="pwd" value={pwd} onChange={setPwd} placeholder="请输入密码" type="password" />
-              <div style={{ display: "flex", gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <Field icon="code" value={code} onChange={setCode} placeholder="请输入验证码" type="tel" maxLength={6} />
-                </div>
-                <button onClick={sendCode} disabled={countdown > 0} style={{ flexShrink: 0, width: 112, border: `1px solid ${NAVY}`, background: countdown > 0 ? "#f1f5f9" : "#fff", color: NAVY, borderRadius: 8, fontSize: 12.5, cursor: countdown > 0 ? "not-allowed" : "pointer", fontWeight: 500 }}>
-                  {countdown > 0 ? `${countdown}s 后重发` : "获取验证码"}
-                </button>
-              </div>
-              <button onClick={loginByPhone} style={{ marginTop: 4, height: 46, border: "none", borderRadius: 8, background: NAVY, color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>登录</button>
-              <p style={{ fontSize: 11.5, color: "#cbd5e1", textAlign: "center", margin: "4px 0 0" }}>POC 演示:任意手机号 + 密码 + 验证码(自动填 1234)</p>
-            </div>
+function InputRow({ icon, children, style }: { icon: "phone" | "shield"; children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{ marginBottom: 16, ...style }}>
+      <div style={{ display: "flex", alignItems: "center", border: "1px solid #e5e5e5", borderRadius: 4, padding: "0 14px", background: "#fff", transition: "border-color .15s", height: 42 }}
+        onFocusCapture={e => (e.currentTarget.style.borderColor = BLUE)} onBlurCapture={e => (e.currentTarget.style.borderColor = "#e5e5e5")}>
+        <span style={{ color: "#999", marginRight: 10, display: "inline-flex", flexShrink: 0 }}>
+          {icon === "phone" ? (
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="1.5" width="7" height="13" rx="1.6" stroke="currentColor" strokeWidth="1.4" /><path d="M7 11.8h2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ background: "#FFF9EC", border: "1px solid #EAD9A8", borderLeft: `4px solid #B07500`, borderRadius: 8, padding: "12px 14px", fontSize: 12.5, color: "#6B5417", lineHeight: 1.7 }}>
-                法人一证通登录需插入 USB Key(上海 CA),由走出去平台统一身份认证。本 POC 演示直接以已认证法人身份登录。
-              </div>
-              <div style={{ display: "flex", justifyContent: "center", padding: "10px 0" }}>
-                <UsbKeyArt />
-              </div>
-              <button onClick={loginByLegal} style={{ height: 46, border: "none", borderRadius: 8, background: NAVY, color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>使用法人一证通登录</button>
-            </div>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5 2v4c0 3.2-2.1 5.6-5 7-2.9-1.4-5-3.8-5-7v-4l5-2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /><path d="M5.8 8l1.6 1.6L10.4 6.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
           )}
-
-          <p style={{ fontSize: 13, color: "#64748b", textAlign: "center", margin: "26px 0 0" }}>
-            还没有账号?<span style={{ color: NAVY, fontWeight: 600, cursor: "pointer" }} onClick={() => setTab("phone")}>立即注册</span>
-          </p>
-        </div>
+        </span>
+        {children}
       </div>
     </div>
   );
 }
 
-// ─── 子组件 ──────────────────────────────────────────────────────────────────
-
-function Feature({ text }: { text: string }) {
+// ─── 底部城市天际线剪影(纯 CSS/SVG,无外部图) ─────────────────────────────
+function CityScape() {
+  // 一排不同高低的楼宇矩形 + 窗点,两个层次(远/近),贴页面底部
+  const far = "rgba(9,64,127,0.10)";
+  const near = "rgba(9,64,127,0.16)";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <span style={{ width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,0.16)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-6.5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </span>
-      <span style={{ fontSize: 15, color: "rgba(255,255,255,0.92)" }}>{text}</span>
-    </div>
-  );
-}
-
-function Field({ icon, value, onChange, placeholder, type = "text", maxLength, }: { icon: "phone" | "pwd" | "code"; value: string; onChange: (v: string) => void; placeholder: string; type?: string; maxLength?: number; }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", height: 46, border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff", padding: "0 14px", gap: 10, transition: "border-color .15s" }} onFocus={e => (e.currentTarget.style.borderColor = NAVY)} onBlur={e => (e.currentTarget.style.borderColor = "#e2e8f0")}>
-      <span style={{ color: "#94a3b8", display: "inline-flex" }}>
-        {icon === "phone" && <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="2" width="7" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.4" /><circle cx="8" cy="11.5" r="0.6" fill="currentColor" /></svg>}
-        {icon === "pwd" && <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.4" /><path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.4" /></svg>}
-        {icon === "code" && <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" /><path d="M5 6h6M5 9h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>}
-      </span>
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} type={type} maxLength={maxLength} style={{ flex: 1, border: "none", outline: "none", fontSize: 14, color: "#1f2937", background: "transparent", height: "100%" }} />
-    </div>
-  );
-}
-
-function GlobeLogo() {
-  return (
-    <span style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.14)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="1.6" /><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" stroke="#fff" strokeWidth="1.6" /></svg>
-    </span>
-  );
-}
-
-function DecoArt() {
-  // 抽象出海连接图样:同心圆 + 经纬 + 节点。
-  return (
-    <svg style={{ position: "absolute", right: -80, top: "50%", transform: "translateY(-50%)", opacity: 0.16, zIndex: 1 }} width="520" height="520" viewBox="0 0 520 520" fill="none">
-      <circle cx="260" cy="260" r="250" stroke="#fff" strokeWidth="1" />
-      <circle cx="260" cy="260" r="190" stroke="#fff" strokeWidth="1" />
-      <circle cx="260" cy="260" r="130" stroke="#fff" strokeWidth="1" />
-      <circle cx="260" cy="260" r="70" stroke="#fff" strokeWidth="1" />
-      <path d="M10 260h500M260 10v500" stroke="#fff" strokeWidth="1" />
-      <path d="M85 85l350 350M435 85L85 435" stroke="#fff" strokeWidth="0.8" />
-      {[[150, 120], [380, 180], [200, 360], [400, 380], [120, 280]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="5" fill="#fff" />)}
-    </svg>
-  );
-}
-
-function UsbKeyArt() {
-  return (
-    <svg width="88" height="60" viewBox="0 0 88 60" fill="none">
-      <rect x="2" y="20" width="54" height="20" rx="3" fill="#3B5099" />
-      <rect x="56" y="24" width="26" height="12" rx="1" fill="#94a3b8" />
-      <rect x="82" y="27" width="4" height="6" fill="#64748b" />
-      <circle cx="16" cy="30" r="3" fill="#fff" opacity="0.8" />
-      <rect x="34" y="10" width="14" height="10" rx="2" fill="#1E7B4D" />
+    <svg style={{ position: "absolute", left: 0, bottom: 0, width: "100%", height: 220, pointerEvents: "none" }} viewBox="0 0 1200 220" preserveAspectRatio="none">
+      {/* 远景楼群 */}
+      <g fill={far}>
+        {[60, 130, 200, 300, 380, 470, 560, 660, 730, 830, 920, 1010, 1090, 1150].map((x, i) => {
+          const h = 70 + ((i * 37) % 85);
+          return <rect key={"f" + x} x={x} y={220 - h} width={44 + ((i * 13) % 22)} height={h} rx={2} />;
+        })}
+      </g>
+      {/* 近景楼群(更高,带窗点) */}
+      <g fill={near}>
+        {[20, 110, 230, 330, 430, 540, 640, 760, 860, 960, 1060, 1140].map((x, i) => {
+          const h = 100 + ((i * 53) % 90);
+          const w = 52 + ((i * 17) % 26);
+          return (
+            <g key={"n" + x}>
+              <rect x={x} y={220 - h} width={w} height={h} rx={2} />
+              {Array.from({ length: Math.floor(h / 26) }).map((_, r) =>
+                Array.from({ length: Math.floor(w / 18) }).map((_, c) => (
+                  <rect key={`${x}-${r}-${c}`} x={x + 8 + c * 18} y={220 - h + 12 + r * 26} width={6} height={9} fill="rgba(255,255,255,0.5)" />
+                ))
+              )}
+            </g>
+          );
+        })}
+      </g>
     </svg>
   );
 }
