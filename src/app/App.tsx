@@ -200,14 +200,10 @@ export default function App() {
   const handleQuickUpgrade = (quickAnswers: Answers) => {
     try { sessionStorage.setItem("chuhai_quick_answers", JSON.stringify(quickAnswers)); } catch { /* ignore */ }
     setShowVersionModal(false);
-    if (isAuthed) {
-      setQuickTestActive(false);
-      setMode("compliance");
-      setShowNewComplianceModal(true);
-    } else {
-      setPendingComplianceEntry(true);
-      setMode("login");
-    }
+    // 匿名/登录都直接开完整版项目名弹窗(作答经 sessionStorage 预填灌入)。
+    setQuickTestActive(false);
+    setMode("compliance");
+    setShowNewComplianceModal(true);
   };
 
   // (ODI detour 已撤:ODI 统一走 Figma 设计线 handleEnterOdiWorkbench → odi-list/odi-project/odi-demo)
