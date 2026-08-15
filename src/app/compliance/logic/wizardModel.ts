@@ -206,3 +206,50 @@ export function clearBranchAnswers(state: WizardState, oldMode: Mode | null): Wi
   multi.forEach(k => delete m[k]);
   return { ...state, answers: { single: s, multi: m } };
 }
+
+// ─── 速测版 → 完整版 作答灌入 ────────────────────────────────────────────────
+// 速测与完整版同题号体系（同源于交付稿 HTML）。速测 Answers 是扁平 Record<string,string>
+// （multi 为逗号拼接字符串），完整版是 {single,multi} 分仓。此函数按题号映射预填：
+//   - mode / lsNone 是向导顶层状态字段
+//   - 完整版不存在的速测字段（如 p_org 申报归口）自动跳过
+//   - multi 值拆逗号回数组；速测的 lsNone 键也兼容
+export function prefillFromQuickAnswers(
+  state: WizardState,
+  quick: Record<string, string>,
+): { state: WizardState; filled: number } {
+  const MULTI_KEYS = new Set(["p_arch", "c1", "lsA", "lsB", "lsC", "s1b", "s2a", "s3"]);
+  const SKIP = new Set(["p_org"]); // 完整版无此题
+  let single = { ...state.answers.single };
+  let multi = { ...state.answers.multi };
+  let filled = 0;
+  let mode = state.mode;
+  let lsNone = state.lsNone;
+
+  for (const [k, raw] of Object.entries(quick)) {
+    const v = (raw ?? "").trim();
+    if (!v || SKIP.has(k)) continue;
+    if (k === "mode") { if (v === "new" || v === "ma" || v === "chg") mode = v; continue; }
+    if (k === "lsNone") { lsNone = v === "1" || v === "true" || v === "是"; continue; }
+    if (MULTI_KEYS.has(k)) {
+      const vals = v.split(/[,，]/).map(x => x.trim()).filter(Boolean);
+      if (vals.length) { multi = { ...multi, [k]: vals }; filled++; }
+    } else {
+      single = { ...single, [k]: v };
+      filled++;
+    }
+  }
+  return { state: { ...state, mode, lsNone, answers: { single, multi } }, filled };
+}
+
+// 读取并消费 sessionStorage 里的速测作答（升级完整版时存入）。返回 null 表示无。
+export function takeQuickAnswersFromSession(): Record<string, string> | null {
+  try {
+    const raw = sessionStorage.getItem("chuhai_quick_answers");
+    if (!raw) return null;
+    sessionStorage.removeItem("chuhai_quick_answers"); // 一次性消费
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === "object" ? obj : null;
+  } catch {
+    return null;
+  }
+}

@@ -469,7 +469,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
         )}
       </div>
       {searchModal}
-      {user && <UserMenu open={userMenuOpen} onClose={() => setUserMenuOpen(false)} anchorRef={userAreaRef} />}
+      {user && <UserMenu open={userMenuOpen} onClose={() => setUserMenuOpen(false)} anchorRef={userAreaRef} user={user} />}
     </div>
   );
 }

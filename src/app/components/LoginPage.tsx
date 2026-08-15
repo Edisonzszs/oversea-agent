@@ -41,12 +41,12 @@ export function LoginPage({ onLogin, onBack }: Props) {
     if (!/^\d{11}$/.test(phone)) { alert("请输入 11 位手机号"); return; }
     if (!pwd.trim()) { alert("请输入密码"); return; }
     if (!code.trim()) { alert("请输入验证码"); return; }
-    onLogin({ userName: phoneToName(phone), userType: "法人", certStatus: "已认证" });
+    onLogin({ userName: phoneToName(phone), userType: "法人", certStatus: "已认证", phone: phoneToName(phone) });
   };
 
   const loginByLegal = () => {
     // POC:法人一证通 mock——真实流程需插入 USB Key 走 CA,这里直接登录。
-    onLogin({ userName: "上海三一集团", userType: "法人", certStatus: "已认证" });
+    onLogin({ userName: "上海三一集团", userType: "法人", certStatus: "已认证", orgName: "上海三一集团" });
   };
 
   return (

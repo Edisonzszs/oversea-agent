@@ -26,6 +26,8 @@ interface Props {
   onBackToXiaohai: () => void;
   onRename?: (id: string) => void;
   onDelete?: (id: string) => void;
+  user?: { userName: string; userType: string; certStatus: string } | null;
+  onLogin?: () => void;
 }
 
 function CollapseIcon() {
@@ -147,7 +149,7 @@ function ProjectItem({ project, active, onSelect, onRename, onDelete }: { projec
   );
 }
 
-export function OdiProjectSidebar({ collapsed, onToggleCollapse, projects, activeProjectId, activeView, onSelectView, onSelectProject, onNewProject, onBackToXiaohai, onRename, onDelete }: Props) {
+export function OdiProjectSidebar({ collapsed, onToggleCollapse, projects, activeProjectId, activeView, onSelectView, onSelectProject, onNewProject, onBackToXiaohai, onRename, onDelete, user, onLogin }: Props) {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
@@ -265,16 +267,30 @@ export function OdiProjectSidebar({ collapsed, onToggleCollapse, projects, activ
           )}
         </div>
 
-        {/* 底部:企业身份(首页风格) */}
-        <div style={{ borderTop: "1px solid #eef2f7", flexShrink: 0, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#1a5bc6,#60a5fa)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>张</span>
+        {/* 底部:企业身份(已登录显示身份卡;未登录显示登录入口,同 ComplianceSidebar) */}
+        {user ? (
+          <div style={{ borderTop: "1px solid #eef2f7", flexShrink: 0, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#1a5bc6,#60a5fa)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{(user.userName || "用")[0]}</span>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1f2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.userName}</div>
+              <div style={{ fontSize: 11, color: "#94a3b8" }}>{user.userType} · {user.certStatus}</div>
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#1f2937" }}>上海三一集团</div>
-            <div style={{ fontSize: 11, color: "#94a3b8" }}>法人 · 已认证</div>
+        ) : (
+          <div onClick={onLogin} title="登录"
+            style={{ borderTop: "1px solid #eef2f7", flexShrink: 0, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", transition: "background .12s" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#f5f7fa"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#64748b" }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.5" r="2.5" stroke="currentColor" strokeWidth="1.4" /><path d="M3 13c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1f2937" }}>登录 / 注册</div>
+              <div style={{ fontSize: 11, color: "#94a3b8" }}>登录后可保存进度与报告</div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {searchModal}
     </div>

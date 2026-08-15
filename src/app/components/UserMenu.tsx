@@ -8,6 +8,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLElement | null>;
+  user?: { userName: string; userType: string; certStatus: string; phone?: string; orgName?: string } | null;
 }
 
 // ─── mock 记忆条目 ──────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ function CloseGlyph() {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
 }
 
-export function UserMenu({ open, onClose, anchorRef }: Props) {
+export function UserMenu({ open, onClose, anchorRef, user }: Props) {
   const [showProfile, setShowProfile] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
@@ -72,11 +73,11 @@ export function UserMenu({ open, onClose, anchorRef }: Props) {
           {/* 头部 */}
           <div style={{ padding: "14px 16px", borderBottom: "1px solid #eef2f7", display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg,#1a5bc6,#60a5fa)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>张</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{(user?.userName || "用")[0]}</span>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1f2937" }}>张三</div>
-              <div style={{ fontSize: 11.5, color: "#94a3b8" }}>上海三一集团 · 法人 · 已认证</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1f2937" }}>{user?.userName ?? "未登录"}</div>
+              <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{[user?.orgName, user?.userType, user?.certStatus].filter(Boolean).join(" · ")}</div>
             </div>
           </div>
           {/* 菜单项 */}
@@ -102,7 +103,7 @@ export function UserMenu({ open, onClose, anchorRef }: Props) {
       </div>
 
       {/* 个人信息弹窗 */}
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} user={user} />}
       {/* 记忆管理弹窗 */}
       {showMemory && <MemoryModal memories={memories} onDelete={(id) => setMemories(prev => prev.filter(m => m.id !== id))} onClose={() => setShowMemory(false)} />}
       {/* 退出登录确认 */}
@@ -119,20 +120,19 @@ const menuItemStyle: React.CSSProperties = {
 };
 
 // ─── 个人信息弹窗 ────────────────────────────────────────────────────────────
-function ProfileModal({ onClose }: { onClose: () => void }) {
+function ProfileModal({ onClose, user }: { onClose: () => void; user?: Props["user"] }) {
   const rows = [
-    { label: "姓名", value: "张三" },
-    { label: "企业名称", value: "上海三一集团" },
-    { label: "用户类型", value: "法人" },
-    { label: "认证状态", value: "已认证" },
-    { label: "统一社会信用代码", value: "91310000MA1FLXXXXX" },
-    { label: "联系电话", value: "021-XXXX-XXXX" },
+    { label: "姓名", value: user?.userName ?? "—" },
+    { label: "企业名称", value: user?.orgName ?? "—" },
+    { label: "用户类型", value: user?.userType ?? "—" },
+    { label: "认证状态", value: user?.certStatus ?? "—" },
+    { label: "联系电话", value: user?.phone ?? "—" },
   ];
   return (
     <ModalShell title="个人信息" onClose={onClose}>
       <div style={{ textAlign: "center", marginBottom: 18 }}>
         <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#1a5bc6,#60a5fa)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>张</span>
+          <span style={{ fontSize: 22, fontWeight: 700, color: "#fff" }}>{(user?.userName || "用")[0]}</span>
         </div>
       </div>
       {rows.map(r => (

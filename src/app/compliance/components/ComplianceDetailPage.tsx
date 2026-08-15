@@ -3,7 +3,7 @@
 
 import { useRef, useState } from "react";
 import { C } from "../complianceTheme";
-import { createInitialState, clearBranchAnswers, type WizardState } from "../logic/wizardModel";
+import { createInitialState, clearBranchAnswers, prefillFromQuickAnswers, takeQuickAnswersFromSession, type WizardState } from "../logic/wizardModel";
 import { buildReport, type ReportResult } from "../logic/scoring";
 import { generateReportHTML } from "../reportHtml";
 import type { ComplianceProject, ComplianceStatus } from "../data/complianceProjects";
@@ -21,7 +21,16 @@ interface Props {
 type Tab = "wizard" | "report";
 
 export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
-  const initial: WizardState = project.snapshot ?? createInitialState();
+  // 初始化:项目快照 → 否则消费 sessionStorage 里的速测作答预填(升级完整版场景) → 空白
+  const [initial] = useState<WizardState>(() => {
+    const base = project.snapshot ?? createInitialState();
+    const quick = takeQuickAnswersFromSession();
+    if (quick) {
+      const { state } = prefillFromQuickAnswers(base, quick);
+      return state;
+    }
+    return base;
+  });
   const [working, setWorking] = useState<WizardState>(initial);
   const [tab, setTab] = useState<Tab>(initial.generated ? "report" : "wizard");
   const [report, setReport] = useState<ReportResult | null>(initial.generated ? buildReport(initial) : null);

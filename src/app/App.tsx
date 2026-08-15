@@ -407,6 +407,8 @@ export default function App() {
             onBackToXiaohai={handleBackToXiaohai}
             onRename={id => setOdiRenameId(id)}
             onDelete={id => setOdiDeleteId(id)}
+            user={authUser}
+            onLogin={() => setMode("login")}
           />
         )}
         {mode === "compliance" && (

@@ -10,6 +10,8 @@ export interface AuthUser {
   userName: string;
   userType: "个人" | "法人";
   certStatus: "已认证" | "未认证";
+  phone?: string;    // 个人登录:手机号(展示用,已是脱敏形态或原号)
+  orgName?: string;  // 法人一证通:企业名
 }
 
 const STORAGE_KEY = "chuhai_auth_user";
