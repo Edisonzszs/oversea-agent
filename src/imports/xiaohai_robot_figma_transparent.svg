@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" x2="0" y1="0" y2="512"><stop stop-color="#E8FAFF"/><stop offset="1" stop-color="#D6EEF8"/></linearGradient>
+  <linearGradient id="ear" x1="0" x2="1"><stop stop-color="#0C75D8"/><stop offset="1" stop-color="#54C6F5"/></linearGradient>
+  <linearGradient id="face" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#123F91"/><stop offset="1" stop-color="#061D4E"/></linearGradient>
+  <filter id="shadow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="10"/></filter>
+</defs>
+<ellipse cx="256" cy="405" rx="105" ry="20" fill="#06478C" opacity="0.18" filter="url(#shadow)"/>
+<path d="M256 76V54" stroke="#397CC3" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+<circle cx="256" cy="43" r="9" fill="#5C9ED4" opacity="0.85"/>
+<path d="M130 186L116 104" stroke="#1F70C6" stroke-width="4" stroke-linecap="round" opacity="0.75"/>
+<path d="M382 186L396 104" stroke="#1F70C6" stroke-width="4" stroke-linecap="round" opacity="0.75"/>
+<rect x="75" y="180" width="72" height="112" rx="30" fill="url(#ear)" opacity="0.85"/>
+<rect x="365" y="180" width="72" height="112" rx="30" fill="url(#ear)" opacity="0.85"/>
+<rect x="117" y="82" width="278" height="250" rx="108" fill="#BFEAFF" opacity="0.45" stroke="white" stroke-width="7"/>
+<rect x="132" y="98" width="248" height="218" rx="98" fill="#8FDDFF" opacity="0.18" stroke="#238EE4" stroke-opacity="0.25" stroke-width="3"/>
+<path d="M143 104C178 72 292 51 358 104" stroke="white" stroke-opacity="0.65" stroke-width="5" stroke-linecap="round"/>
+<rect x="145" y="154" width="222" height="128" rx="54" fill="url(#face)" stroke="#59CFFF" stroke-opacity="0.45" stroke-width="4"/>
+<rect x="185" y="198" width="29" height="39" rx="14" fill="#71F2F6"/>
+<rect x="298" y="198" width="29" height="39" rx="14" fill="#71F2F6"/>
+<rect x="239" y="248" width="34" height="8" rx="4" fill="#45C5E8" opacity="0.6"/>
+<rect x="238" y="318" width="36" height="37" rx="14" fill="#A3E5FF" opacity="0.65" stroke="white" stroke-opacity="0.5" stroke-width="3"/>
+<ellipse cx="256" cy="375" rx="63" ry="31" fill="#BEEBFF" opacity="0.55" stroke="white" stroke-opacity="0.65" stroke-width="4"/>
+<rect x="226" y="355" width="60" height="31" rx="15" fill="#8BD9F9" opacity="0.55"/>
+<circle cx="256" cy="397" r="11" fill="#4597D7" opacity="0.7"/>
+</svg>
