@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from "react";
 import { C } from "../complianceTheme";
 import type { WizardApi } from "./fields";
 import type { Mode } from "../logic/weights";
-import { useVoiceInput, MicButton } from "../../components/VoiceInput";
+import { useVoiceInput, MicButton, SendButton } from "../../components/VoiceInput";
 import { getFieldsForStep, type ParsedCandidate } from "../copilot/fieldCatalog";
 import { copilotApi } from "../copilot/api";
 import { buildChatSystemPrompt, parseChatResponse } from "../copilot/chatPrompt";
@@ -63,7 +63,8 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
   const [messages, setMessages] = useState<ChatMessage[]>(() => [greeting()]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const voice = useVoiceInput((text) => setInput(prev => prev ? prev + text : text));
+  const [interim, setInterim] = useState("");
+  const voice = useVoiceInput((text) => setInput(prev => prev ? prev + text : text), setInterim);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stepRef = useRef(step);
@@ -163,18 +164,16 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
 
       {/* 输入区（主流智能体样式：容器内置提示与发送钮）*/}
       <div style={{ borderTop: `1px solid ${C.lineSoft}`, padding: "8px 10px 10px", flexShrink: 0, background: "#fff" }}>
-        <div style={{ border: `1px solid ${input.trim() ? C.primaryBorder : C.line}`, borderRadius: 12, background: C.field, padding: "6px 6px 5px 10px", transition: "border-color .15s" }}>
+        <div style={{ border: `1px solid ${input.trim() || interim ? C.primaryBorder : C.line}`, borderRadius: 12, background: C.field, padding: "6px 6px 5px 10px", transition: "border-color .15s" }}>
           <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown} placeholder="描述投资安排，或问字段含义/该填什么/法规…" rows={1}
             style={{ width: "100%", boxSizing: "border-box", fontSize: 13, border: "none", background: "transparent", color: C.ink, outline: "none", resize: "none", lineHeight: 1.5, padding: 0, minHeight: 20, maxHeight: 120, overflow: "hidden" }} />
+          {interim && <div style={{ fontSize: 11.5, color: C.muted, fontStyle: "italic", lineHeight: 1.4, margin: "2px 0" }}>正在识别：{interim}…</div>}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 0 }}>
-            <span style={{ fontSize: 11.5, color: C.sub, paddingLeft: 2, display: "flex", alignItems: "center", gap: 6 }}>
-              {voice.supported && <MicButtonSmall listening={voice.listening} onClick={voice.toggle} />}
-              Enter 发送 · Shift+Enter 换行
+            <span style={{ fontSize: 11.5, color: C.sub, paddingLeft: 2, display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+              <MicButton size="sm" supported={voice.supported} listening={voice.listening} onClick={voice.toggle} />
+              {voice.listening ? <span style={{ fontSize: 11.5, color: "#dc2626", fontWeight: 600 }}>正在聆听…</span> : "Enter 发送 · Shift+Enter 换行"}
             </span>
-            <button onClick={send} disabled={loading || !input.trim()} title="发送" aria-label="发送"
-              style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: input.trim() && !loading ? C.primary : C.faint, color: "#fff", cursor: input.trim() && !loading ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", transition: "background .15s" }}>
-              {loading ? <span style={{ fontSize: 13 }}>…</span> : <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 12.5V3.5M8 3.5L4 7.5M8 3.5l4 4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-            </button>
+            <SendButton size="sm" loading={loading} disabled={!input.trim()} onClick={send} />
           </div>
         </div>
       </div>
@@ -247,24 +246,3 @@ function ConfirmCard({ c, onConfirm, onDiscard }: { c: ParsedCandidate; onConfir
   );
 }
 
-// 伴填面板用的小号麦克风按钮（与输入框行内对齐）。
-// 可及性:视觉保持 22px,但热区外扩到 38×38(padding+负 margin)满足触达标准。
-function MicButtonSmall({ listening, onClick }: { listening: boolean; onClick: () => void }) {
-  return (
-    <span style={{ display: "inline-flex", width: 38, height: 38, alignItems: "center", justifyContent: "center", margin: -8, flexShrink: 0 }}>
-      <button onClick={onClick} title={listening ? "停止语音" : "语音输入"} aria-label="语音输入"
-        style={{ width: 22, height: 22, borderRadius: "50%", border: "none", background: listening ? "#dc2626" : "#e8edf5", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background .15s", verticalAlign: "middle" }}>
-        {listening ? (
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff", animation: "voicePulseS 1s ease-in-out infinite" }}>
-            <style>{`@keyframes voicePulseS{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}`}</style>
-          </span>
-        ) : (
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-            <rect x="6" y="2" width="4" height="7" rx="2" stroke="#64748b" strokeWidth="1.4" />
-            <path d="M4 8c0 2.2 1.8 4 4 4s4-1.8 4-4M8 12v2M5.5 14h5" stroke="#64748b" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
-        )}
-      </button>
-    </span>
-  );
-}

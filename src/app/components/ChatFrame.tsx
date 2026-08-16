@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { ChatMessage } from "./conversationData";
-import { useVoiceInput, MicButton } from "./VoiceInput";
+import { useVoiceInput, MicButton, SendButton } from "./VoiceInput";
 
 // 将 Markdown 风格的 **粗体** 和 *斜体* 转为 React 元素，纯文本渲染（避免显示 ** 符号）。
 function RichText({ text }: { text: string }) {
@@ -39,8 +39,9 @@ interface Props {
 export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
+  const [interim, setInterim] = useState("");
   const [loading, setLoading] = useState(false);
-  const voice = useVoiceInput((text) => setInput(prev => prev ? prev + text : text));
+  const voice = useVoiceInput((text) => setInput(prev => prev ? prev + text : text), setInterim);
   // 流式状态
   const [thinkText, setThinkText] = useState("");
   const [answerText, setAnswerText] = useState("");
@@ -187,16 +188,16 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
           display: "flex", alignItems: "flex-end", padding: "10px 12px", gap: 8, minHeight: 56,
           maxWidth: 820, margin: "0 auto",
         }}>
-          <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="请输入您的问题，我会尽力为您解答...（按 Enter 发送，Shift + Enter 换行）"
-            style={{ flex: 1, border: "none", outline: "none", resize: "none", fontSize: 13, color: "#1a2744", background: "transparent", lineHeight: 1.6, fontFamily: "inherit", minHeight: 36 }}
-            rows={2} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder="请输入您的问题，我会尽力为您解答...（按 Enter 发送，Shift + Enter 换行）"
+              style={{ width: "100%", boxSizing: "border-box", border: "none", outline: "none", resize: "none", fontSize: 13, color: "#1a2744", background: "transparent", lineHeight: 1.6, fontFamily: "inherit", minHeight: 36, display: "block" }}
+              rows={2} />
+            {interim && <div style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", lineHeight: 1.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>正在识别：{interim}…</div>}
+          </div>
           <MicButton listening={voice.listening} supported={voice.supported} onClick={voice.toggle} />
-          <button onClick={() => send()} disabled={loading || !input.trim()}
-            style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0, border: "none", background: input.trim() && !loading ? "linear-gradient(135deg,#1a5bc6,#2d78e8)" : "#c8daf0", display: "flex", alignItems: "center", justifyContent: "center", cursor: input.trim() && !loading ? "pointer" : "default", transition: "all .15s" }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 8L13.5 3l-2 5 2 5z" stroke={input.trim() && !loading ? "#fff" : "#94a3b8"} strokeWidth="1.5" strokeLinejoin="round" /></svg>
-          </button>
+          <SendButton size="md" loading={loading} disabled={!input.trim()} onClick={() => send()} />
         </div>
       </div>
     </div>
