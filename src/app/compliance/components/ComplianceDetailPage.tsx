@@ -10,6 +10,7 @@ import type { ComplianceProject, ComplianceStatus } from "../data/complianceProj
 import { ComplianceWizard } from "./ComplianceWizard";
 import { ComplianceReport } from "./ComplianceReport";
 import { ComplianceCopilotPanel } from "./ComplianceCopilotPanel";
+import { FeedbackFab } from "./FeedbackSurvey";
 import type { WizardApi } from "./fields";
 
 interface Props {
@@ -209,6 +210,8 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
           onInstantQAConsumed={() => setInstantQA(null)}
         />
       </div>
+      {/* 使用反馈问卷 FAB(填写向导期间随时可点;right 384 避让右侧伴填栏) */}
+      {tab === "wizard" && <FeedbackFab right={384} />}
     </div>
   );
 }

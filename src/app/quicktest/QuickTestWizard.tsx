@@ -11,6 +11,7 @@ import {
   CopilotAskContext, InstantQAContext,
 } from "../compliance/components/fields";
 import { ComplianceCopilotPanel } from "../compliance/components/ComplianceCopilotPanel";
+import { FeedbackFab } from "../compliance/components/FeedbackSurvey";
 import { lookupQA } from "../compliance/copilot/qaLibrary";
 import { COUNTRY_OPTIONS, isRiskCtry } from "../compliance/logic/country";
 import type { Mode } from "../compliance/logic/weights";
@@ -177,6 +178,8 @@ export function QuickTestWizard({ onUpgrade, onBackHome }: Props) {
           </div>
           </InstantQAContext.Provider>
           </CopilotAskContext.Provider>
+          {/* 使用反馈问卷 FAB(步骤 0-6 随时可点;right 384 避让右侧伴填栏;报告步不显示) */}
+          {step < 7 && <FeedbackFab right={384} />}
         </div>
 
         {/* 右侧:小海·合规伴填(与完整版同一面板) */}
