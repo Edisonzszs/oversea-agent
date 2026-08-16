@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { C } from "../complianceTheme";
+import { useEscapeClose } from "../../components/useEscapeClose";
 
 interface Props {
   existingNames: string[];
@@ -11,6 +12,7 @@ interface Props {
 
 export function NewComplianceProjectModal({ existingNames, onConfirm, onCancel }: Props) {
   const [name, setName] = useState("");
+  useEscapeClose(onCancel);
   const trimmed = name.trim();
   const isDup = trimmed && existingNames.some(n => n === trimmed);
 

@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { C } from "../complianceTheme";
+import { useEscapeClose } from "../../components/useEscapeClose";
 
 // 交付稿 FB_SCORE(改版后) —— 10 项打分题
 const FB_SCORE = [
@@ -38,6 +39,7 @@ interface Props {
 
 export function FeedbackFab({ right = 24 }: Props) {
   const [open, setOpen] = useState(false);
+  useEscapeClose(open ? () => setOpen(false) : null); // 浮层打开时 Esc 关闭(内容保留)
   // 问卷数据(实例级:关闭再开不丢)
   const [role, setRole] = useState("");
   const [date, setDate] = useState("");

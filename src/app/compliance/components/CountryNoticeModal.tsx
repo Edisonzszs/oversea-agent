@@ -2,12 +2,14 @@
 
 import { C } from "../complianceTheme";
 import { COUNTRY_NOTICE_SECTIONS } from "../logic/country";
+import { useEscapeClose } from "../../components/useEscapeClose";
 
 export function CountryNoticeModal({ country, onClose, onAck }: {
   country: string;
   onClose: () => void;
   onAck: () => void;
 }) {
+  useEscapeClose(onClose);
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,20,40,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 10, maxWidth: 560, width: "92%", maxHeight: "80vh", overflow: "auto", padding: "22px 26px", boxShadow: "0 8px 30px rgba(0,20,40,0.3)" }}>

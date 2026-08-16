@@ -5,6 +5,7 @@
 //   匿名版多一行登录引导文案 + 「立即登录」文字按钮。
 
 import { createPortal } from "react-dom";
+import { useEscapeClose } from "./useEscapeClose";
 
 const BLUE = "#1890ff";
 const PURPLE = "#722ed1";
@@ -19,6 +20,7 @@ interface Props {
 
 export function VersionSelectModal({ variant, onClose, onQuickTest, onFull, onLogin }: Props) {
   const isAnon = variant === "anonymous";
+  useEscapeClose(onClose);
 
   return createPortal(
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10020, background: "rgba(15,23,42,0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: '"Microsoft YaHei","PingFang SC",sans-serif' }}>

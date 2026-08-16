@@ -167,7 +167,7 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
           <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown} placeholder="描述投资安排，或问字段含义/该填什么/法规…" rows={1}
             style={{ width: "100%", boxSizing: "border-box", fontSize: 13, border: "none", background: "transparent", color: C.ink, outline: "none", resize: "none", lineHeight: 1.5, padding: 0, minHeight: 20, maxHeight: 120, overflow: "hidden" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 0 }}>
-            <span style={{ fontSize: 10.5, color: C.muted, paddingLeft: 2, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11.5, color: C.sub, paddingLeft: 2, display: "flex", alignItems: "center", gap: 6 }}>
               {voice.supported && <MicButtonSmall listening={voice.listening} onClick={voice.toggle} />}
               Enter 发送 · Shift+Enter 换行
             </span>
@@ -247,21 +247,24 @@ function ConfirmCard({ c, onConfirm, onDiscard }: { c: ParsedCandidate; onConfir
   );
 }
 
-// 伴填面板用的小号麦克风按钮（与输入框行内对齐）
+// 伴填面板用的小号麦克风按钮（与输入框行内对齐）。
+// 可及性:视觉保持 22px,但热区外扩到 38×38(padding+负 margin)满足触达标准。
 function MicButtonSmall({ listening, onClick }: { listening: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} title={listening ? "停止语音" : "语音输入"} aria-label="语音输入"
-      style={{ width: 22, height: 22, borderRadius: "50%", border: "none", background: listening ? "#dc2626" : "#e8edf5", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background .15s", verticalAlign: "middle" }}>
-      {listening ? (
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff", animation: "voicePulseS 1s ease-in-out infinite" }}>
-          <style>{`@keyframes voicePulseS{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}`}</style>
-        </span>
-      ) : (
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-          <rect x="6" y="2" width="4" height="7" rx="2" stroke="#64748b" strokeWidth="1.4" />
-          <path d="M4 8c0 2.2 1.8 4 4 4s4-1.8 4-4M8 12v2M5.5 14h5" stroke="#64748b" strokeWidth="1.4" strokeLinecap="round" />
-        </svg>
-      )}
-    </button>
+    <span style={{ display: "inline-flex", width: 38, height: 38, alignItems: "center", justifyContent: "center", margin: -8, flexShrink: 0 }}>
+      <button onClick={onClick} title={listening ? "停止语音" : "语音输入"} aria-label="语音输入"
+        style={{ width: 22, height: 22, borderRadius: "50%", border: "none", background: listening ? "#dc2626" : "#e8edf5", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background .15s", verticalAlign: "middle" }}>
+        {listening ? (
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff", animation: "voicePulseS 1s ease-in-out infinite" }}>
+            <style>{`@keyframes voicePulseS{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}`}</style>
+          </span>
+        ) : (
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+            <rect x="6" y="2" width="4" height="7" rx="2" stroke="#64748b" strokeWidth="1.4" />
+            <path d="M4 8c0 2.2 1.8 4 4 4s4-1.8 4-4M8 12v2M5.5 14h5" stroke="#64748b" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+        )}
+      </button>
+    </span>
   );
 }
