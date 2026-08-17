@@ -165,16 +165,8 @@ function formatElapsed(s: number): string {
 // Canvas 渲染(每帧重绘,无 DOM reconciliation);RMS 响度驱动(比频谱峰值平滑);
 // 新条从右进入、旧条向左滚动(帧率无关的时间步进,后台切回不跳变);
 // 静音门限以下画矮灰条(滤环境底噪);拿不到频谱时降级为安静起伏的模拟包络。
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-export function VoiceWaveform({ meterRef, height = 22, barWidth = 3, gap = 3, minH = 3, maxH = 18, intervalMs = 70, color = "#94a3b8", muted = "#d7dee9" }: {
+// 性能:fillRect 直填(不走圆角路径)、历史条数按可见宽度封顶、绘制出界即 break。
+export function VoiceWaveform({ meterRef, height = 22, barWidth = 3, gap = 8, minH = 3, maxH = 18, intervalMs = 90, color = "#94a3b8", muted = "#d7dee9" }: {
   meterRef: React.MutableRefObject<AudioMeter | null>; height?: number; barWidth?: number; gap?: number; minH?: number; maxH?: number; intervalMs?: number; color?: string; muted?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -188,10 +180,10 @@ export function VoiceWaveform({ meterRef, height = 22, barWidth = 3, gap = 3, mi
     let raf = 0;
     let w = 0;
     const step = barWidth + gap;
-    const maxBars = Math.ceil(2400 / step) + 2; // 环形历史容量,足够覆盖任意宽度
-    const heights = new Float32Array(maxBars);  // [0] 最新
-    const muteds = new Uint8Array(maxBars);
-    let count = 0;
+    const CAP = 400;                         // 历史容量硬上限(任意宽屏都够)
+    const heights = new Float32Array(CAP);   // [0] 最新
+    const muteds = new Uint8Array(CAP);
+    let count = 0;                           // 实际保留 = 可见条数 + 2(resize 里封顶)
     let scroll = 0;
     let smooth = 0;
     let last = performance.now();
@@ -205,6 +197,8 @@ export function VoiceWaveform({ meterRef, height = 22, barWidth = 3, gap = 3, mi
       canvas.style.width = w + "px";
       canvas.style.height = height + "px";
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const cap = Math.min(CAP, Math.ceil(w / step) + 2);
+      if (count > cap) count = cap;
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -231,10 +225,11 @@ export function VoiceWaveform({ meterRef, height = 22, barWidth = 3, gap = 3, mi
     };
 
     const push = (v: number, silent: boolean) => {
-      for (let i = maxBars - 1; i > 0; i--) { heights[i] = heights[i - 1]; muteds[i] = muteds[i - 1]; }
+      const n = Math.min(CAP, count + 1);
+      for (let i = n - 1; i > 0; i--) { heights[i] = heights[i - 1]; muteds[i] = muteds[i - 1]; }
       heights[0] = v;
       muteds[0] = silent ? 1 : 0;
-      if (count < maxBars) count++;
+      count = n;
     };
 
     const draw = () => {
@@ -242,11 +237,10 @@ export function VoiceWaveform({ meterRef, height = 22, barWidth = 3, gap = 3, mi
       const base = height / 2;
       for (let i = 0; i < count; i++) {
         const x = Math.round(w - barWidth - i * step - scroll);
-        if (x + barWidth < 0) continue;
+        if (x + barWidth < 0) break; // 条按近→远排列,出左界即停
         const bh = Math.max(1, Math.round(heights[i]));
         ctx.fillStyle = muteds[i] ? muted : color;
-        roundRect(ctx, x, Math.round(base - bh / 2), barWidth, bh, Math.min(barWidth / 2, 1.5));
-        ctx.fill();
+        ctx.fillRect(x, Math.round(base - bh / 2), barWidth, bh);
       }
     };
 
@@ -261,7 +255,7 @@ export function VoiceWaveform({ meterRef, height = 22, barWidth = 3, gap = 3, mi
     };
 
     if (reduced) {
-      count = Math.min(maxBars, Math.ceil(w / step));
+      count = Math.min(CAP, Math.ceil(w / step));
       for (let i = 0; i < count; i++) { heights[i] = minH; muteds[i] = 1; }
       draw();
     } else {
@@ -281,7 +275,7 @@ export function RecordingBar({ elapsed, sessionText = "", interim, meterRef, com
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 1 : 3, minWidth: 0, flex: 1, justifyContent: "center" }}>
       <div style={{ position: "relative", display: "flex", alignItems: "center", minHeight: compact ? 20 : 30 }}>
-        <VoiceWaveform meterRef={meterRef} height={compact ? 14 : 22} barWidth={compact ? 2 : 3} gap={compact ? 2.5 : 3} minH={compact ? 2 : 3} maxH={compact ? 10 : 18} intervalMs={compact ? 80 : 70} />
+        <VoiceWaveform meterRef={meterRef} height={compact ? 14 : 22} barWidth={compact ? 2 : 3} gap={compact ? 6 : 8} minH={compact ? 2 : 3} maxH={compact ? 10 : 18} intervalMs={compact ? 100 : 90} />
         <span style={{
           position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
           fontSize: 12, color: "#64748b", fontWeight: 700, fontVariantNumeric: "tabular-nums",
