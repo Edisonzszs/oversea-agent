@@ -22,7 +22,8 @@ const R2: FieldDef[] = [
   { code: "domestic_company_name", name: "境内公司名称", round: 2, dept: "shared", required: true, note: "企业主档复用(认证预填)" },
   { code: "overseas_company_cn", name: "境外企业中文名称", round: 2, dept: "shared", required: true },
   { code: "overseas_company_en", name: "境外企业外文名称", round: 2, dept: "shared" },
-  { code: "final_destination", name: "投资目的地", round: 2, dept: "shared", required: true, note: "最终项目经营/建设/并购标的所在地" },
+  { code: "direct_destination", name: "直接目的地", round: 2, dept: "shared", required: true, note: "第一层级境外企业所在地;单层路径可与最终目的地相同(流程文档#11:两档分别保存)" },
+  { code: "final_destination", name: "投资目的地(最终目的地)", round: 2, dept: "shared", required: true, note: "最终项目经营/建设/并购标的所在地" },
   { code: "business_scope", name: "经营范围", round: 2, dept: "shared", required: true },
   { code: "industry", name: "所属行业", round: 2, dept: "shared", required: true },
 ];

@@ -1,5 +1,5 @@
 import { createGuideProject } from "../odi/data/odiProjects";
-import { commitField } from "../odi/field/odiGuideLogic";
+import { applyLinkage, commitField, computeDerived } from "../odi/field/odiGuideLogic";
 import type { OdiField } from "../odi/data/types";
 
 // ─── Service type ───────────────────────────────────────────────────────────
@@ -76,7 +76,8 @@ export function progressFromStatus(status: AssistStatus): ("done" | "current" | 
 
 /** 助办演示字段池：POC 未接 OCR，首次上传后按场景预设模拟"已解析"。
  *  injectIssues=true 时注入 3 处典型问题（注册资本>总额 / 项目说明缺失 / 境外企业名缺失）
- *  以演示三态校验；false 为干净池（全部通过，对应已完成项目）。 */
+ *  以演示三态校验；false 为干净池（全部通过，对应已完成项目）。
+ *  池就绪后接线引导逻辑：computeDerived(人民币金额按汇率派生) + applyLinkage(单一中方默认)。 */
 export function seedAssistFieldPool(injectIssues: boolean): OdiField[] {
   let pool = createGuideProject("助办(模拟已解析)", "新设独资", "快速体验").fieldPool;
   if (injectIssues) {
@@ -84,6 +85,7 @@ export function seedAssistFieldPool(injectIssues: boolean): OdiField[] {
     pool = commitField(pool, "project_summary", "", "upload");                       // 项目说明缺失 → 发改委缺失
     pool = commitField(pool, "overseas_company_cn", "", "upload");                   // 境外企业名缺失 → 跨业务缺失
   }
+  pool = applyLinkage(computeDerived(pool));
   return pool;
 }
 
@@ -144,7 +146,7 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     uploadedCount: 6,
     mismatchCount: 1,
     missingCount: 2,
-    passedCount: 17,
+    passedCount: 22,
     generatedCount: 2,
     updatedAt: "今天 14:32",
     materials: [
@@ -184,7 +186,7 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     uploadedCount: 6,
     mismatchCount: 0,
     missingCount: 0,
-    passedCount: 20,
+    passedCount: 25,
     generatedCount: 5,
     updatedAt: "2026年7月15日",
     materials: [

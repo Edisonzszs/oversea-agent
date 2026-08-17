@@ -58,12 +58,12 @@ describe("seedAssistFieldPool — 助办演示字段池", () => {
     const t = totals(seedAssistFieldPool(true));
     expect(t.failed).toBe(1);   // 注册资本 900 > 总额 800 → 商务委不通过
     expect(t.missing).toBe(2);  // 项目说明、境外企业名 → 发改委/跨业务缺失
-    expect(t.passed).toBe(17);
+    expect(t.passed).toBe(22);
   });
   it("干净池：全部通过（与 mock p3 计数口径一致）", () => {
     const t = totals(seedAssistFieldPool(false));
     expect(t.failed).toBe(0);
     expect(t.missing).toBe(0);
-    expect(t.passed).toBe(20);
+    expect(t.passed).toBe(25);
   });
 });

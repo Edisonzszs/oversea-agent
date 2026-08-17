@@ -1,10 +1,10 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { gsap, Flip, useGSAP, DUR, EASE, SHIFT, prefersReducedMotion } from "../motion/tokens";
 import type { DemoProject } from "./odiProjectData";
 import { allFieldDefs } from "../odi/field/odiFieldCatalog";
 import { emptyField, type OdiField } from "../odi/data/types";
-import { commitField } from "../odi/field/odiGuideLogic";
-import { validateOdiPool, type ValidationCheck } from "../odi/validation/odiValidationEngine";
+import { applyLinkage, commitField, computeDerived } from "../odi/field/odiGuideLogic";
+import { validateOdiPool, type ValidationCheck, type ValidationResult } from "../odi/validation/odiValidationEngine";
 
 type Tab = "overview" | "form" | "verify" | "result";
 type Scene = "新设独资" | "并购" | "增资变更";
@@ -54,8 +54,22 @@ const CASE_DATA: Record<Scene, {
 };
 
 // ── Scene content sections ────────────────────────────────
-function NewSetupCase({ editable, onEdit }: { editable: string | null; onEdit: (field: string | null) => void }) {
-  const c = CASE_DATA["新设独资"];
+// P1:案例字段可编辑并回写字段池(overrides → caseToPool → 联动/派生 → 校验实时变)
+type CaseData = (typeof CASE_DATA)["新设独资"];
+function CaseFieldInput({ value, onCommit, onClose }: { value: string; onCommit: (v: string) => void; onClose: () => void }) {
+  return (
+    <div style={{ padding: "4px 8px 8px" }}>
+      <input defaultValue={value} autoFocus
+        onBlur={e => { onCommit(e.target.value); onClose(); }}
+        onKeyDown={e => { if (e.key === "Enter") { onCommit((e.target as HTMLInputElement).value); onClose(); } if (e.key === "Escape") onClose(); }}
+        style={{ width: "100%", fontSize: 13, fontWeight: 600, color: "#1f2937", border: "1px solid #1a5bc6", borderRadius: 6, padding: "4px 8px", background: "#fff", outline: "none", boxSizing: "border-box" }} />
+    </div>
+  );
+}
+
+function NewSetupCase({ c, editable, onEdit, onCommit }: {
+  c: CaseData; editable: string | null; onEdit: (field: string | null) => void; onCommit: (key: string, value: string) => void;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Investment path diagram */}
@@ -99,10 +113,7 @@ function NewSetupCase({ editable, onEdit }: { editable: string | null; onEdit: (
             <div key={f.key} style={{ borderRadius: 9, border: `1px solid ${f.highlight ? "#fde68a" : "#e8edf5"}`, background: f.highlight ? "#fffbeb" : "#f8fafc", overflow: "hidden" }}>
               <div style={{ padding: "8px 12px 0", fontSize: 10, color: "#9ca3af" }}>{f.label}</div>
               {editable === f.key ? (
-                <div style={{ padding: "4px 8px 8px" }}>
-                  <input defaultValue={f.value} autoFocus onBlur={() => onEdit(null)}
-                    style={{ width: "100%", fontSize: 13, fontWeight: 600, color: "#1f2937", border: "1px solid #1a5bc6", borderRadius: 6, padding: "4px 8px", background: "#fff", outline: "none", boxSizing: "border-box" }} />
-                </div>
+                <CaseFieldInput value={f.value} onCommit={v => onCommit(f.key, v)} onClose={() => onEdit(null)} />
               ) : (
                 <div onClick={() => onEdit(f.key)} style={{ padding: "4px 12px 10px", fontSize: 13, fontWeight: 600, color: f.highlight ? "#92400e" : "#1f2937", cursor: "text" }}>
                   {f.value}
@@ -130,8 +141,9 @@ function NewSetupCase({ editable, onEdit }: { editable: string | null; onEdit: (
   );
 }
 
-function AcquisitionCase({ editable, onEdit }: { editable: string | null; onEdit: (field: string | null) => void }) {
-  const c = CASE_DATA["并购"];
+function AcquisitionCase({ c, editable, onEdit, onCommit }: {
+  c: CaseData; editable: string | null; onEdit: (field: string | null) => void; onCommit: (key: string, value: string) => void;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Equity before/after diagram */}
@@ -161,16 +173,20 @@ function AcquisitionCase({ editable, onEdit }: { editable: string | null; onEdit
         <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 16 }}>并购要素</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {[
-            { label: "并购目标", value: c.targetCN, key: "target" },
+            { label: "并购目标", value: c.targetCN, key: "targetCN" },
             { label: "目标国家", value: c.country, key: "country" },
-            { label: "收购价款（合并口径）", value: c.investAmount, key: "amount", highlight: true },
+            { label: "收购价款（合并口径）", value: c.investAmount, key: "investAmount", highlight: true },
             { label: "收购比例", value: c.equity, key: "equity", highlight: true },
-            { label: "资金筹措方式", value: c.fundSource, key: "fund" },
+            { label: "资金筹措方式", value: c.fundSource, key: "fundSource" },
             { label: "行业分类", value: c.industry, key: "industry" },
           ].map(f => (
             <div key={f.key} style={{ borderRadius: 9, border: `1px solid ${(f as any).highlight ? "#fde68a" : "#e8edf5"}`, background: (f as any).highlight ? "#fffbeb" : "#f8fafc" }}>
               <div style={{ padding: "8px 12px 0", fontSize: 10, color: "#9ca3af" }}>{f.label}</div>
-              <div onClick={() => onEdit(f.key)} style={{ padding: "4px 12px 10px", fontSize: 13, fontWeight: 600, color: (f as any).highlight ? "#92400e" : "#1f2937", cursor: "text" }}>{f.value}</div>
+              {editable === f.key ? (
+                <CaseFieldInput value={f.value} onCommit={v => onCommit(f.key, v)} onClose={() => onEdit(null)} />
+              ) : (
+                <div onClick={() => onEdit(f.key)} style={{ padding: "4px 12px 10px", fontSize: 13, fontWeight: 600, color: (f as any).highlight ? "#92400e" : "#1f2937", cursor: "text" }}>{f.value}</div>
+              )}
             </div>
           ))}
         </div>
@@ -185,8 +201,9 @@ function AcquisitionCase({ editable, onEdit }: { editable: string | null; onEdit
   );
 }
 
-function ChangeCase({ editable, onEdit }: { editable: string | null; onEdit: (field: string | null) => void }) {
-  const c = CASE_DATA["增资变更"];
+function ChangeCase({ c, editable, onEdit, onCommit }: {
+  c: CaseData; editable: string | null; onEdit: (field: string | null) => void; onCommit: (key: string, value: string) => void;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Before → after comparison */}
@@ -234,13 +251,17 @@ function ChangeCase({ editable, onEdit }: { editable: string | null; onEdit: (fi
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {[
             { label: "变更类型", value: "增资 + 股权变更", key: "type" },
-            { label: "资金来源", value: c.fundSource, key: "fund" },
+            { label: "资金来源", value: c.fundSource, key: "fundSource" },
             { label: "变更原因", value: "产能扩张，引入本地战略股东", key: "reason" },
             { label: "目标国家", value: c.country, key: "country" },
           ].map(f => (
             <div key={f.key} style={{ borderRadius: 9, border: "1px solid #e8edf5", background: "#f8fafc" }}>
               <div style={{ padding: "8px 12px 0", fontSize: 10, color: "#9ca3af" }}>{f.label}</div>
-              <div onClick={() => onEdit(f.key)} style={{ padding: "4px 12px 10px", fontSize: 13, fontWeight: 600, color: "#1f2937", cursor: "text" }}>{f.value}</div>
+              {editable === f.key ? (
+                <CaseFieldInput value={f.value} onCommit={v => onCommit(f.key, v)} onClose={() => onEdit(null)} />
+              ) : (
+                <div onClick={() => onEdit(f.key)} style={{ padding: "4px 12px 10px", fontSize: 13, fontWeight: 600, color: "#1f2937", cursor: "text" }}>{f.value}</div>
+              )}
             </div>
           ))}
         </div>
@@ -250,10 +271,13 @@ function ChangeCase({ editable, onEdit }: { editable: string | null; onEdit: (fi
 }
 
 // ── FormTab — case experience ─────────────────────────────
-function FormTab({ scene }: { scene: Scene }) {
+function FormTab({ scene, overrides, onCommit }: {
+  scene: Scene; overrides: Record<string, string>; onCommit: (key: string, value: string) => void;
+}) {
   const [step, setStep] = useState(0); // 0=项目方案 1=投资结构 2=项目说明
   const [editable, setEditable] = useState<string | null>(null);
   const stepLabels = ["项目方案", "投资结构与资金", "项目说明"];
+  const c: CaseData = { ...CASE_DATA[scene], ...overrides };
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
@@ -286,18 +310,18 @@ function FormTab({ scene }: { scene: Scene }) {
           <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, background: "#fff7ed", color: "#92400e", border: "1px solid #fde68a" }}>模拟数据 · 仅演示</span>
         </div>
 
-        {step === 0 && scene === "新设独资" && <NewSetupCase editable={editable} onEdit={setEditable} />}
-        {step === 0 && scene === "并购"     && <AcquisitionCase editable={editable} onEdit={setEditable} />}
-        {step === 0 && scene === "增资变更" && <ChangeCase editable={editable} onEdit={setEditable} />}
+        {step === 0 && scene === "新设独资" && <NewSetupCase c={c} editable={editable} onEdit={setEditable} onCommit={onCommit} />}
+        {step === 0 && scene === "并购"     && <AcquisitionCase c={c} editable={editable} onEdit={setEditable} onCommit={onCommit} />}
+        {step === 0 && scene === "增资变更" && <ChangeCase c={c} editable={editable} onEdit={setEditable} onCommit={onCommit} />}
 
         {step === 1 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
               { label: "出资方式", value: "现汇出资", key: "method", readonly: false },
-              { label: "境外汇款金额（美元）", value: CASE_DATA[scene].investAmount, key: "amount", readonly: false, highlight: true },
+              { label: "境外汇款金额（美元）", value: c.investAmount, key: "investAmount", readonly: false, highlight: true },
               { label: "对应人民币（系统计算）", value: "≈ RMB 3,608万（参考汇率 7.216）", key: "rmb", readonly: true },
-              { label: "注册资本", value: CASE_DATA[scene].regCapital, key: "reg", readonly: false, highlight: true },
-              { label: "资金来源说明", value: CASE_DATA[scene].fundSource, key: "fund", readonly: false },
+              { label: "注册资本", value: c.regCapital, key: "regCapital", readonly: false, highlight: true },
+              { label: "资金来源说明", value: c.fundSource, key: "fundSource", readonly: false },
               { label: "预计汇款期限", value: "批准后6个月内", key: "deadline", readonly: true, sysLabel: "根据场景默认" },
             ].map(f => (
               <div key={f.key} style={{ borderRadius: 10, border: `1px solid ${(f as any).highlight ? "#fde68a" : "#e8edf5"}`, background: f.readonly ? "#f8fafc" : (f as any).highlight ? "#fffbeb" : "#fff", padding: "12px 16px" }}>
@@ -341,8 +365,9 @@ function FormTab({ scene }: { scene: Scene }) {
 }
 
 // ── 案例数据 → 字段池(供校验引擎跑「模拟校验」)──────────────
-function caseToPool(scene: Scene): OdiField[] {
-  const c = CASE_DATA[scene];
+// P1:overrides = 用户在案例字段上的编辑(按 CASE_DATA 键),合并后建池;编辑实时反映到校验。
+function caseToPool(scene: Scene, overrides: Record<string, string> = {}): OdiField[] {
+  const c: CaseData = { ...CASE_DATA[scene], ...overrides };
   const method: string = scene === "并购" ? "并购" : scene === "增资变更" ? "增资" : "新设";
   let pool = allFieldDefs().map(d => emptyField(d.code, d.name, d.round, d.dept));
   const set = (code: string, value?: string) => { if (value && value.trim()) pool = commitField(pool, code, value, "guide"); };
@@ -354,8 +379,9 @@ function caseToPool(scene: Scene): OdiField[] {
   set("domestic_company_name", c.investorCN);
   set("overseas_company_cn", c.targetCN);
   set("industry", c.industry);
+  set("direct_destination", c.country);
   set("final_destination", c.country);
-  const eqRaw = c.equity.replace(/%/g, "").trim();
+  const eqRaw = c.equity.replace(/%/g, "").replace(/→.*/, "").trim(); // "60%→75%" 取变更前
   const eqNum = parseFloat(eqRaw);
   set("chinese_ratio", eqRaw);
   if (!Number.isNaN(eqNum)) set("foreign_ratio", String(100 - eqNum));
@@ -368,22 +394,24 @@ function caseToPool(scene: Scene): OdiField[] {
   return pool;
 }
 
-// 校验三态 → 展示样式
-const CHECK_DISPLAY: Record<"ok" | "adjust" | "missing", { label: string; color: string; bg: string; border: string }> = {
+// 校验四态 → 展示样式
+const CHECK_DISPLAY: Record<"ok" | "adjust" | "missing" | "skip", { label: string; color: string; bg: string; border: string }> = {
   ok:      { label: "通过",     color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
   adjust:  { label: "不通过",   color: "#d97706", bg: "#fff7ed", border: "#fde68a" },
   missing: { label: "缺失",     color: "#b45309", bg: "#fff7ed", border: "#fed7aa" },
+  skip:    { label: "未触发",   color: "#64748b", bg: "#f8fafc", border: "#e8edf5" },
 };
 function checkDisplay(status: string) {
-  return status === "通过" ? CHECK_DISPLAY.ok : status === "不通过" ? CHECK_DISPLAY.adjust : CHECK_DISPLAY.missing;
+  return status === "通过" ? CHECK_DISPLAY.ok : status === "不通过" ? CHECK_DISPLAY.adjust : status === "未触发" ? CHECK_DISPLAY.skip : CHECK_DISPLAY.missing;
 }
 
-function VerifyTab({ scene }: { scene: Scene }) {
-  const checks = validateOdiPool(caseToPool(scene)).checks;
+function VerifyTab({ result }: { result: ValidationResult }) {
+  const checks = result.checks;
   const counts = {
     ok: checks.filter(c => c.status === "通过").length,
     adjust: checks.filter(c => c.status === "不通过").length,
     missing: checks.filter(c => c.status === "缺失").length,
+    skip: checks.filter(c => c.status === "未触发").length,
   };
 
   return (
@@ -393,16 +421,26 @@ function VerifyTab({ scene }: { scene: Scene }) {
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 2 }}>模拟校验说明</div>
           <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.6 }}>
-            以下结果由校验引擎基于当前案例字段实时计算(通过/不通过/缺失),仅用于理解 ODI 填报逻辑,不等于正式审核结论。模拟问题不会阻断材料生成。
+            以下结果由校验引擎基于当前案例字段实时计算(通过/不通过/缺失/未触发),仅用于理解 ODI 填报逻辑,不等于正式审核结论。「未触发」表示规则条件不满足(如缺对应输入),不算问题。模拟问题不会阻断材料生成。
           </div>
         </div>
       </div>
+
+      {result.hints.length > 0 && (
+        <div style={{ background: "#f8fafc", border: "1px solid #e8edf5", borderRadius: 12, padding: "12px 18px", marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>风险提示 · 仅提示人工确认，不影响校验结论</div>
+          {result.hints.map(h => (
+            <div key={h.id} style={{ fontSize: 12, color: "#64748b", lineHeight: 1.7 }}>⚠ {h.text}</div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         {([
           { key: "ok",      label: "通过",   color: "#15803d", bg: "#f0fdf4" },
           { key: "adjust",  label: "不通过", color: "#d97706", bg: "#fff7ed" },
           { key: "missing", label: "缺失",   color: "#b45309", bg: "#fff7ed" },
+          { key: "skip",    label: "未触发", color: "#64748b", bg: "#f8fafc" },
         ] as const).map(s => (
           <div key={s.key} style={{ padding: "10px 18px", borderRadius: 10, background: s.bg, display: "flex", gap: 8, alignItems: "center" }}>
             <span style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{counts[s.key]}</span>
@@ -415,7 +453,7 @@ function VerifyTab({ scene }: { scene: Scene }) {
         {checks.map(c => {
           const cfg = checkDisplay(c.status);
           return (
-            <div key={c.id} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${c.status === "通过" ? "#e8edf5" : cfg.border}`, padding: "14px 18px" }}>
+            <div key={c.id} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${c.status === "通过" ? "#e8edf5" : cfg.border}`, padding: "14px 18px", opacity: c.status === "未触发" ? 0.75 : 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: "#64748b", background: "#f1f5f9", padding: "2px 7px", borderRadius: 5, flexShrink: 0 }}>{c.domain}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "#1f2937", flex: 1 }}>{c.field}</span>
@@ -424,7 +462,7 @@ function VerifyTab({ scene }: { scene: Scene }) {
               {c.evidence && c.status !== "通过" && (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: "#64748b" }}>当前:{c.evidence}</div>
               )}
-              {c.suggestion && (
+              {c.suggestion && c.status !== "未触发" && (
                 <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: "#fff7ed", fontSize: 12, color: "#92400e", lineHeight: 1.6 }}>
                   💡 {c.suggestion}
                 </div>
@@ -503,7 +541,7 @@ function ResultTab({ project }: { project: DemoProject }) {
 }
 
 // ── Overview tab ──────────────────────────────────────────
-function OverviewTab({ project, onChangeTab }: { project: DemoProject; onChangeTab: (t: Tab) => void }) {
+function OverviewTab({ project, checkCount, onChangeTab }: { project: DemoProject; checkCount: number; onChangeTab: (t: Tab) => void }) {
   const completedSteps = project.stepStatuses.filter(s => s === "completed").length;
   const c = CASE_DATA[project.scene as Scene] ?? CASE_DATA["新设独资"];
 
@@ -637,7 +675,7 @@ function OverviewTab({ project, onChangeTab }: { project: DemoProject; onChangeT
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
         {[
           { label: "体验提示", value: project.warningCount, color: "#d97706", sub: "仅供参考" },
-          { label: "模拟校验项", value: validateOdiPool(caseToPool(project.scene as Scene)).checks.length, color: "#374151", sub: "引擎实时计算" },
+          { label: "模拟校验项", value: checkCount, color: "#374151", sub: "引擎实时计算" },
           { label: "已生成参考稿", value: project.generatedCount, color: "#1a5bc6", sub: "含水印·仅演示" },
         ].map(s => (
           <div key={s.label} style={{ background: "#fff", border: "1px solid #e8edf5", borderRadius: 12, padding: "14px 18px" }}>
@@ -684,6 +722,16 @@ interface Props { project: DemoProject; onBack: () => void; }
 
 export function OdiDemoDetailPage({ project, onBack }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  // P1:案例字段编辑(overrides)回写字段池,经 联动/派生 后供校验实时计算
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const verifyResult = useMemo(() => {
+    const pool = applyLinkage(computeDerived(caseToPool(project.scene as Scene, overrides)));
+    return validateOdiPool(pool);
+  }, [project.scene, overrides]);
+  const evaluatedCount = verifyResult.checks.filter(c => c.status !== "未触发").length;
+  const handleCommit = (key: string, value: string) => {
+    setOverrides(prev => (prev[key] === value ? prev : { ...prev, [key]: value }));
+  };
   const tabBarRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const underlineFlip = useRef<ReturnType<typeof Flip.getState> | null>(null);
@@ -740,9 +788,9 @@ export function OdiDemoDetailPage({ project, onBack }: Props) {
 
       {/* Content */}
       <div ref={contentRef} style={{ flex: 1, overflowY: "auto" }}>
-        {activeTab === "overview" && <OverviewTab project={project} onChangeTab={changeTab} />}
-        {activeTab === "form"     && <FormTab scene={project.scene as Scene} />}
-        {activeTab === "verify"   && <VerifyTab scene={project.scene as Scene} />}
+        {activeTab === "overview" && <OverviewTab project={project} checkCount={evaluatedCount} onChangeTab={changeTab} />}
+        {activeTab === "form"     && <FormTab scene={project.scene as Scene} overrides={overrides} onCommit={handleCommit} />}
+        {activeTab === "verify"   && <VerifyTab result={verifyResult} />}
         {activeTab === "result"   && <ResultTab project={project} />}
       </div>
     </div>

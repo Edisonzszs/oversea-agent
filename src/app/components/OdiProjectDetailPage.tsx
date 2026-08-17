@@ -30,6 +30,7 @@ const CHECK_COLORS: Record<string, { color: string; bg: string; border: string }
   "通过":   { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
   "不通过": { color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
   "缺失":   { color: "#d97706", bg: "#fff7ed", border: "#fed7aa" },
+  "未触发": { color: "#64748b", bg: "#f8fafc", border: "#e8edf5" },
   "待校验": { color: "#92400e", bg: "#fffbeb", border: "#fde68a" },
 };
 
@@ -168,7 +169,7 @@ function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: 
 
   const deptResults = validation.summaries.map(s => ({
     dept: deptLabel(s.dept),
-    passed: s.passed, failed: s.failed, missing: s.missing, triggered: true, total: s.total,
+    passed: s.passed, failed: s.failed, missing: s.missing, skipped: s.skipped, triggered: true, total: s.total,
     checkedAt: project.validatedAt ?? "—",
   }));
 
@@ -178,6 +179,16 @@ function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: 
       <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "10px 16px", fontSize: 12, color: "#92400e" }}>
         本校验结果由AI辅助生成，仅供参考，不代表主管部门正式审核意见。请在提交前人工复核。
       </div>
+
+      {/* 风险提示(只提示人工确认,不影响三态 —— 流程文档 §1.4) */}
+      {validation.hints.length > 0 && (
+        <div style={{ background: "#f8fafc", border: "1px solid #e8edf5", borderRadius: 10, padding: "10px 16px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>风险提示 · 仅提示人工确认，不影响校验结论</div>
+          {validation.hints.map(h => (
+            <div key={h.id} style={{ fontSize: 12, color: "#64748b", lineHeight: 1.7 }}>⚠ {h.text}</div>
+          ))}
+        </div>
+      )}
 
       {/* Version notice */}
       <div style={{ background: "#f8fafc", border: "1px solid #e8edf5", borderRadius: 10, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
@@ -231,8 +242,13 @@ function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: 
                   </div>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 10, color: "#9ca3af" }}>共{d.total}项 · 校验时间：{d.checkedAt}</div>
+                {d.skipped > 0 && (
+                  <div style={{ fontSize: 10, color: "#64748b", background: "#f8fafc", border: "1px solid #e8edf5", borderRadius: 4, padding: "0 6px" }}>
+                    未触发 {d.skipped} 项（条件不满足，不计入三态）
+                  </div>
+                )}
               </div>
               <div style={{ height: 4, background: "#f1f5f9", borderRadius: 2, overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${Math.round((d.passed / d.total) * 100)}%`, background: "#16a34a", borderRadius: 2 }} />
