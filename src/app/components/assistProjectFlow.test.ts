@@ -55,16 +55,16 @@ describe("progressFromStatus — 五步办理进度推导", () => {
 });
 
 describe("seedAssistFieldPool — 助办演示字段池", () => {
-  it("注入问题池：3 不通过 + 2 缺失（与 mock p1 计数口径一致,P2 全量 NDRC）", () => {
+  it("注入问题池：4 不通过 + 2 缺失（与 mock p1 计数口径一致,P3 含跨业务）", () => {
     const t = totals(seedAssistFieldPool(true));
-    expect(t.failed).toBe(3);   // 商务线 regcap + NDRC-A-006(USCC) + NDRC-C-009(承诺书缺责任表述)
+    expect(t.failed).toBe(4);   // 商务线 regcap + NDRC-A-006(USCC) + NDRC-C-009(承诺书) + XB-D008(投资总额±2.5%)
     expect(t.missing).toBe(2);  // 项目说明、境外企业名 → 发改委/跨业务缺失
-    expect(t.passed).toBe(41);
+    expect(t.passed).toBe(54);
   });
-  it("干净池：全部通过（与 mock p3 计数口径一致,P2 全量 NDRC）", () => {
+  it("干净池：全部通过（与 mock p3 计数口径一致,P3 含跨业务）", () => {
     const t = totals(seedAssistFieldPool(false));
     expect(t.failed).toBe(0);
     expect(t.missing).toBe(0);
-    expect(t.passed).toBe(46);
+    expect(t.passed).toBe(60);
   });
 });

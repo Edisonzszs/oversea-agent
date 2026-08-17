@@ -123,6 +123,18 @@ export function seedAssistFieldPool(injectIssues: boolean): OdiField[] {
   pool = commitField(pool, "petition_body",
     `关于${PROJECT}项目申请备案的请示\n上海市发展和改革委员会：\n按照《企业境外投资管理办法》（国家发展改革委令第11号）有关规定，现将${PROJECT}项目申请报告和有关附件提交你委。请予以备案。\n附件：境外投资项目备案表及相关材料\n${ENTITY}\n2026年8月17日`,
     "upload");
+  // 联系人(双侧交集字段)
+  pool = commitField(pool, "contact_name", "王海", "upload");
+  pool = commitField(pool, "contact_phone", "13800138000", "upload");
+  pool = commitField(pool, "contact_email", "wanghai@xx-sh.com", "upload");
+  // 商务备案表材料值(跨业务 15 组矩阵比对来源;问题池:投资总额 820 vs 发改 800 → XB-D008 不通过,R-004 教学)
+  pool = setMaterialValues(pool, "domestic_company_name", [{ material: "商务备案表", value: ENTITY }]);
+  pool = setMaterialValues(pool, "investment_method", [{ material: "商务备案表", value: "新设" }]);
+  pool = setMaterialValues(pool, "final_destination", [{ material: "商务备案表", value: "越南·胡志明市" }]);
+  pool = setMaterialValues(pool, "investment_total", [{ material: "商务备案表", value: injectIssues ? "820万美元" : "800万美元" }]);
+  pool = setMaterialValues(pool, "chinese_investment_amount", [{ material: "商务备案表", value: "800" }]);
+  pool = setMaterialValues(pool, "contact_phone", [{ material: "商务备案表", value: "13800138000" }]);
+  pool = setMaterialValues(pool, "contact_email", [{ material: "商务备案表", value: "wanghai@xx-sh.com" }]);
   if (injectIssues) {
     pool = commitField(pool, "overseas_registered_capital", "900万美元", "upload"); // 注册资本>总额 → 商务委不通过
     pool = commitField(pool, "project_summary", "", "upload");                       // 项目说明缺失 → 发改委缺失
@@ -187,9 +199,9 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     status: "材料校验中",
     investmentType: "新设",
     uploadedCount: 6,
-    mismatchCount: 3,
+    mismatchCount: 4,
     missingCount: 2,
-    passedCount: 41,
+    passedCount: 54,
     generatedCount: 2,
     updatedAt: "今天 14:32",
     materials: [
@@ -230,7 +242,7 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     uploadedCount: 6,
     mismatchCount: 0,
     missingCount: 0,
-    passedCount: 46,
+    passedCount: 60,
     generatedCount: 5,
     updatedAt: "2026年7月15日",
     materials: [

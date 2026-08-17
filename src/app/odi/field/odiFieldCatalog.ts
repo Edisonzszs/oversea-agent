@@ -27,6 +27,10 @@ const R2: FieldDef[] = [
   { code: "final_destination", name: "投资目的地(最终目的地)", round: 2, dept: "shared", required: true, note: "最终项目经营/建设/并购标的所在地" },
   { code: "business_scope", name: "经营范围", round: 2, dept: "shared", required: true },
   { code: "industry", name: "所属行业", round: 2, dept: "shared", required: true },
+  // 联系人(双侧共有交集字段 —— 跨业务 15 组矩阵之联系人组;格式校验 A-051/A-054)
+  { code: "contact_name", name: "联系人", round: 2, dept: "shared", required: true },
+  { code: "contact_phone", name: "手机", round: 2, dept: "shared", required: true, note: "11 位手机号格式(D-014)" },
+  { code: "contact_email", name: "电子邮件", round: 2, dept: "shared", required: true, note: "格式校验(正式版 A-054 正则)" },
   // 发改侧财务四科目(万元人民币;取数口径见 E-011~E-014:由备案表↔审计报告比对)
   { code: "total_assets", name: "总资产(万元)", round: 2, dept: "ndrc", kind: "currency", note: "取资产负债表「负债和所有者权益合计」" },
   { code: "net_assets", name: "净资产(万元)", round: 2, dept: "ndrc", kind: "currency", note: "取「所有者权益合计」" },

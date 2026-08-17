@@ -382,6 +382,9 @@ function caseToPool(scene: Scene, overrides: Record<string, string> = {}): OdiFi
   set("industry", c.industry);
   set("direct_destination", c.country);
   set("final_destination", c.country);
+  set("contact_name", "YQU");
+  set("contact_phone", "13800138000");
+  set("contact_email", "yqu@starleap.com");
   const eqRaw = c.equity.replace(/%/g, "").replace(/→.*/, "").trim(); // "60%→75%" 取变更前
   const eqNum = parseFloat(eqRaw);
   set("chinese_ratio", eqRaw);

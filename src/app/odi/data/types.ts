@@ -11,7 +11,7 @@ export interface FieldSource {
 }
 
 /** 材料键(统一字段池的多来源值 —— 流程文档 §9:同一字段多值全部保留,不自动覆盖) */
-export type OdiMaterialKey = "备案表" | "营业执照" | "审计报告" | "承诺书" | "请示" | "资金证明";
+export type OdiMaterialKey = "备案表" | "商务备案表" | "营业执照" | "审计报告" | "承诺书" | "请示" | "资金证明";
 
 /** 单份材料识别出的该字段值(供发改委跨材料一致性规则比对) */
 export interface MaterialValue {

@@ -16,6 +16,7 @@
 import type { OdiContributionRow, OdiField, OdiMaterialKey } from "../data/types";
 import { getVal } from "../field/odiGuideLogic";
 import { validateOdiPool, type ValidationCheck, type ValidationDomain, type ValidationHint, type ValidationResult, type DeptSummary } from "./odiValidationEngine";
+import { validateXbRules } from "./odiXbRules";
 
 // ── 枚举(正式版 rules.py:20-37) ─────────────────────────────
 export const CONTRIBUTION_METHODS = ["货币", "证券", "实物", "技术", "知识产权", "股权", "债权", "提供融资", "提供担保", "其他"] as const;
@@ -413,6 +414,60 @@ export function validateNdrcRules(pool: OdiField[], extras: { contributionRows?:
     }
   }
 
+  // ── 存在性与格式组(A-026/030 必填存在、A-051 手机、A-054 邮箱) ──
+  {
+    // A-026/029(合并):折算汇率必填存在(金额已识别的语境下)
+    if (getVal(pool, "chinese_investment_amount").trim()) {
+      const ok = getVal(pool, "exchange_rate").trim() !== "";
+      checks.push({
+        id: "NDRC-A-026", domain: "发改委", field: "折算汇率存在",
+        status: ok ? "通过" : "缺失",
+        evidence: ok ? `汇率=${getVal(pool, "exchange_rate")}` : "未识别到【折算汇率】",
+        suggestion: ok ? undefined : "未识别到【中方投资额折算汇率】，该项校验结果为缺失。",
+      });
+    } else {
+      checks.push(nt("NDRC-A-026", "折算汇率存在", "中方投资额未识别,存在性检查未触发。"));
+    }
+    // A-027/030(合并):中方实际使用币种和金额必填存在
+    if (getVal(pool, "chinese_investment_amount").trim()) {
+      const ok = getVal(pool, "cny_currency_1").trim() !== "" && getVal(pool, "cny_amount_1").trim() !== "";
+      checks.push({
+        id: "NDRC-A-030", domain: "发改委", field: "中方实际使用币种和金额存在",
+        status: ok ? "通过" : "缺失",
+        evidence: ok ? `${getVal(pool, "cny_currency_1")} ${getVal(pool, "cny_amount_1")}` : "未识别到【中方实际使用币种和金额】",
+        suggestion: ok ? undefined : "未识别到【中方实际使用币种和金额】，该项校验结果为缺失。",
+      });
+    } else {
+      checks.push(nt("NDRC-A-030", "中方实际使用币种和金额存在", "中方投资额未识别,存在性检查未触发。"));
+    }
+    // A-054 联系人邮箱格式(正式版正则;空值由必填报缺失,格式规则未触发)
+    {
+      const email = getVal(pool, "contact_email").trim();
+      if (email) {
+        const ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+        checks.push({
+          id: "NDRC-A-054", domain: "发改委", field: "联系人电子邮件格式",
+          status: ok ? "通过" : "不通过",
+          evidence: email,
+          suggestion: ok ? undefined : "该项未通过，请核验材料。（EMAIL_FORMAT_INVALID：电子邮件格式应形如 name@example.com）",
+        });
+      } else checks.push(nt("NDRC-A-054", "联系人电子邮件格式", "联系人电子邮件未填写(由必填报缺失)。"));
+    }
+    // A-051 联系人手机格式(11 位;共性字段对照 D-014 口径)
+    {
+      const phone = getVal(pool, "contact_phone").trim();
+      if (phone) {
+        const ok = /^1\d{10}$/.test(phone);
+        checks.push({
+          id: "NDRC-A-051", domain: "发改委", field: "联系人手机格式",
+          status: ok ? "通过" : "不通过",
+          evidence: phone,
+          suggestion: ok ? undefined : "该项未通过，请核验材料。（手机号应为 11 位数字）",
+        });
+      } else checks.push(nt("NDRC-A-051", "联系人手机格式", "联系人手机未填写(由必填报缺失)。"));
+    }
+  }
+
   // ── blocked 三条(正式版 rule_decisions.json:业务口径待确认,本轮不执行) ──
   for (const [id, field, reason] of [
     ["NDRC-A-033", "自有资金余额vs中方投资额(全额)", "与 F-007/R-008 部分覆盖口径冲突,业务口径待确认。"],
@@ -431,13 +486,14 @@ export function validateNdrcRules(pool: OdiField[], extras: { contributionRows?:
   return { checks, hints, summaries: [summary] };
 }
 
-/** 组合校验:商务线 13 条即时校验 + 发改委规则族,按三域重算汇总。
+/** 组合校验:商务线 13 条即时校验 + 发改委规则族 + 跨业务核心字段(15 组矩阵首批),按三域重算汇总。
  *  extras.contributionRows:中方投资额构成明细行(项目级)。 */
 export function validateOdiFull(pool: OdiField[], extras: { contributionRows?: OdiContributionRow[] } = {}): ValidationResult {
   const commerce = validateOdiPool(pool);
   const ndrc = validateNdrcRules(pool, extras);
-  const checks = [...commerce.checks, ...ndrc.checks];
-  const hints = [...commerce.hints, ...ndrc.hints];
+  const xb = validateXbRules(pool);
+  const checks = [...commerce.checks, ...ndrc.checks, ...xb.checks];
+  const hints = [...commerce.hints, ...ndrc.hints, ...xb.hints];
   const domains: ValidationDomain[] = ["商务委", "发改委", "跨业务"];
   const summaries: DeptSummary[] = domains.map(d => {
     const cs = checks.filter(c => c.domain === d);

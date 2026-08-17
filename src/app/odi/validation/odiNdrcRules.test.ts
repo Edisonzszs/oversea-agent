@@ -33,9 +33,9 @@ describe("归一化口径(正式版 rules.py)", () => {
 describe("发改委首批规则(P2)", () => {
   it("无材料值的池:除 blocked 三条外全部未触发,不产生三态", () => {
     const r = validateNdrcRules(emptyPool());
-    expect(r.checks.length).toBe(25);
+    expect(r.checks.length).toBe(29);
     expect(r.checks.filter(c => c.status === "blocked").length).toBe(3); // A-033/C-010/X-019 恒 blocked
-    expect(r.checks.filter(c => c.status === "未触发").length).toBe(22);
+    expect(r.checks.filter(c => c.status === "未触发").length).toBe(26);
     expect(getIssues({ ...r, hints: r.hints }).length).toBe(0);
   });
 
@@ -111,25 +111,25 @@ describe("发改委首批规则(P2)", () => {
 });
 
 describe("组合引擎 validateOdiFull", () => {
-  it("商务线+发改委合并,三域齐全,NDRC 计入发改委域", () => {
+  it("商务线+发改委+跨业务合并,三域齐全,NDRC 计入发改委域", () => {
     const r = validateOdiFull(seedAssistFieldPool(false), { contributionRows: DEMO_CONTRIBUTION_ROWS });
     expect(r.summaries.length).toBe(3);
     const ndrc = r.summaries.find(s => s.dept === "发改委")!;
-    expect(ndrc.passed).toBe(2 + 21); // 商务线归发改委的必填(项目说明2) + NDRC 21 条通过
+    expect(ndrc.passed).toBe(2 + 25); // 商务线归发改委的必填(项目说明2) + NDRC 25 条通过(P3 含存在性/格式4条)
     expect(ndrc.blocked).toBe(3);     // A-033/C-010/X-019 口径待定,不计入三态
-    expect(r.checks.filter(c => c.id.startsWith("NDRC-")).length).toBe(25);
+    expect(r.checks.filter(c => c.id.startsWith("NDRC-")).length).toBe(29);
     // 干净池全部通过
     expect(r.summaries.every(s => s.failed + s.missing === 0)).toBe(true);
   });
 
-  it("问题池:USCC/承诺书责任表述计入发改委不通过(与 mock p1 口径一致)", () => {
+  it("问题池:USCC/承诺书计入发改委不通过,XB 投资总额计入跨业务(与 mock p1 口径一致)", () => {
     const r = validateOdiFull(seedAssistFieldPool(true), { contributionRows: DEMO_CONTRIBUTION_ROWS });
     const ndrc = r.summaries.find(s => s.dept === "发改委")!;
     expect(ndrc.failed).toBe(2); // NDRC-A-006 + NDRC-C-009
     const sum = (k: "passed" | "failed" | "missing") => r.summaries.reduce((n, s) => n + s[k], 0);
-    expect(sum("failed")).toBe(3); // 商务线 regcap + NDRC uscc + NDRC 承诺书
+    expect(sum("failed")).toBe(4); // 商务线 regcap + NDRC uscc + NDRC 承诺书 + XB 投资总额
     expect(sum("missing")).toBe(2);
-    expect(sum("passed")).toBe(41);
+    expect(sum("passed")).toBe(54);
   });
 });
 

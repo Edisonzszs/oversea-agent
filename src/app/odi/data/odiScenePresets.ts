@@ -1,4 +1,4 @@
-// ODI 预制场景预设值 + 快速体验预填(Task 7,spec §5.1)。
+﻿// ODI 预制场景预设值 + 快速体验预填(Task 7,spec §5.1)。
 // SCENE_PRESETS:三场景的示例值(fieldCode -> value);applyPreset 把预设写入空池。
 // 调用方:createGuideProject(name, scene, "快速体验") 时由 odiProjects.ts 调用 applyPreset。
 
@@ -12,6 +12,7 @@ export const SCENE_PRESETS: Record<OdiScene, Record<string, string>> = {
     overseas_registered_capital: "500万美元", investment_total: "800万美元",
     overseas_company_cn: "越南XX智能装备有限公司", direct_destination: "越南", final_destination: "越南·胡志明市",
     business_scope: "智能装备制造", industry: "制造业",
+    contact_name: "王海", contact_phone: "13800138000", contact_email: "wanghai@xx-sh.com",
     chinese_shareholder: "上海XX公司", chinese_ratio: "100",
     chinese_investment_amount: "800", foreign_investment_amount: "0", exchange_rate: "7.2",
     // 现金出资为合计项(=自有资金+银行贷款,备案表口径"现金出资X万,其中:自有Y,银行贷款Z")
@@ -26,6 +27,7 @@ export const SCENE_PRESETS: Record<OdiScene, Record<string, string>> = {
     overseas_registered_capital: "1000万欧元", investment_total: "1000万美元",
     overseas_company_cn: "德国XX工业有限公司", direct_destination: "德国", final_destination: "德国",
     business_scope: "工业设备制造", industry: "工业设备制造",
+    contact_name: "李德", contact_phone: "13900139000", contact_email: "lide@xx-sh.com",
     chinese_shareholder: "上海XX公司", chinese_ratio: "80", foreign_shareholder: "原股东", foreign_ratio: "20",
     chinese_investment_amount: "800", foreign_investment_amount: "200", exchange_rate: "7.2",
     merger_subsidiary_name: "上海XX(德国)并购实施子公司",
@@ -37,6 +39,7 @@ export const SCENE_PRESETS: Record<OdiScene, Record<string, string>> = {
     overseas_registered_capital: "600万美元", investment_total: "500万美元",
     overseas_company_cn: "新加坡XX研发中心", direct_destination: "新加坡", final_destination: "新加坡",
     business_scope: "软件和信息技术服务", industry: "信息传输、软件和信息技术服务业",
+    contact_name: "陈新", contact_phone: "13700137000", contact_email: "chenxin@xx-sh.com",
     chinese_shareholder: "上海XX公司", chinese_ratio: "100",
     chinese_investment_amount: "500", foreign_investment_amount: "0", exchange_rate: "7.2",
     project_summary: "(示例)对新加坡研发中心增资,扩大研发团队。",
