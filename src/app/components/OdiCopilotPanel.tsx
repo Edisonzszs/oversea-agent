@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { C } from "../compliance/complianceTheme";
-import { useVoiceInput, MicButton, SendButton } from "./VoiceInput";
+import { useVoiceInput, MicButton, SendButton, RecordingBar } from "./VoiceInput";
 import { copilotApi } from "../compliance/copilot/api";
 import xiaohaiLogo from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
 
@@ -144,18 +144,24 @@ export function OdiCopilotPanel({ collapsed, onToggleCollapse, context }: Props)
         {messages.map(m => <MessageView key={m.id} m={m} />)}
       </div>
 
-      {/* 输入区 */}
+      {/* 输入区（对齐 ChatGPT：录音态整个输入框切换为录音条） */}
       <div style={{ borderTop: `1px solid ${C.lineSoft}`, padding: "8px 10px 10px", flexShrink: 0, background: "#fff" }}>
-        <div style={{ border: `1px solid ${input.trim() ? C.primaryBorder : C.line}`, borderRadius: 12, background: C.field, padding: "6px 6px 5px 10px", transition: "border-color .15s" }}>
-          <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown} placeholder="问字段怎么填、口径、流程、材料、法规…" rows={1}
-            style={{ width: "100%", boxSizing: "border-box", fontSize: 13, border: "none", background: "transparent", color: C.ink, outline: "none", resize: "none", lineHeight: 1.5, padding: 0, minHeight: 20, maxHeight: 120, overflow: "hidden" }} />
-          {interim && <div style={{ fontSize: 11.5, color: C.muted, fontStyle: "italic", lineHeight: 1.4, margin: "2px 0" }}>正在识别：{interim}…</div>}
+        <div style={{ border: `1px solid ${voice.listening ? "#e8a7a7" : (input.trim() || interim ? C.primaryBorder : C.line)}`, borderRadius: 12, background: voice.listening ? "#fffafa" : C.field, padding: "6px 6px 5px 10px", transition: "border-color .15s, background .15s" }}>
+          {voice.listening ? (
+            <RecordingBar elapsed={voice.elapsed} interim={interim} compact />
+          ) : (
+            <>
+              <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown} placeholder="问字段怎么填、口径、流程、材料、法规…" rows={1}
+                style={{ width: "100%", boxSizing: "border-box", fontSize: 13, border: "none", background: "transparent", color: C.ink, outline: "none", resize: "none", lineHeight: 1.5, padding: 0, minHeight: 20, maxHeight: 120, overflow: "hidden" }} />
+              {interim && <div style={{ fontSize: 11.5, color: C.muted, fontStyle: "italic", lineHeight: 1.4, margin: "2px 0" }}>正在识别：{interim}…</div>}
+            </>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 0 }}>
             <span style={{ fontSize: 11.5, color: C.sub, paddingLeft: 2, display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
               <MicButton size="sm" supported={voice.supported} listening={voice.listening} onClick={voice.toggle} />
               {voice.listening ? <span style={{ fontSize: 11.5, color: "#dc2626", fontWeight: 600 }}>正在聆听…</span> : "Enter 发送 · Shift+Enter 换行"}
             </span>
-            <SendButton size="sm" loading={loading} disabled={!input.trim()} onClick={send} />
+            <SendButton size="sm" loading={loading} disabled={!input.trim() || voice.listening} onClick={send} />
           </div>
         </div>
       </div>

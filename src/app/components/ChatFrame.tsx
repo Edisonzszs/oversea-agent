@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { ChatMessage } from "./conversationData";
-import { useVoiceInput, MicButton, SendButton } from "./VoiceInput";
+import { useVoiceInput, MicButton, SendButton, RecordingBar } from "./VoiceInput";
 
 // 将 Markdown 风格的 **粗体** 和 *斜体* 转为 React 元素，纯文本渲染（避免显示 ** 符号）。
 function RichText({ text }: { text: string }) {
@@ -50,6 +50,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null); // 停止生成(中断流式输出)
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [messages, loading, thinkText, answerText]);
   useEffect(() => { const el = inputRef.current; if (!el) return; el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }, [input]);
@@ -70,10 +71,13 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
 
     try {
       const apiMessages = [{ role: "system", content: XIAOHAI_SYSTEM }, ...newMsgs.map(m => ({ role: m.role, content: m.text }))];
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       const resp = await fetch("/api/copilot/general-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: apiMessages }),
+        signal: ctrl.signal,
       });
       if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
 
@@ -91,36 +95,46 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
           if (!line.startsWith("data: ")) continue;
           const data = line.slice(6).trim();
           if (data === "[DONE]") continue;
-          try {
-            const json = JSON.parse(data);
-            if (json.error) throw new Error(json.error);
-            const delta = json.choices?.[0]?.delta;
-            if (!delta) continue;
-            if (delta.reasoning_content) {
-              accThink += delta.reasoning_content;
-              setPhase("thinking"); setThinkText(accThink);
-            }
-            if (delta.content) {
-              accAnswer += delta.content;
-              setPhase("answering"); setAnswerText(accAnswer); setThinkOpen(false);
-            }
-          } catch {}
+          // 只吞 JSON 解析失败;流式错误事件须抛给外层 catch 走友好兜底
+          let json: any;
+          try { json = JSON.parse(data); } catch { continue; }
+          if (json.error) throw new Error(json.error);
+          const delta = json.choices?.[0]?.delta;
+          if (!delta) continue;
+          if (delta.reasoning_content) {
+            accThink += delta.reasoning_content;
+            setPhase("thinking"); setThinkText(accThink);
+          }
+          if (delta.content) {
+            accAnswer += delta.content;
+            setPhase("answering"); setAnswerText(accAnswer); setThinkOpen(false);
+          }
         }
       }
 
       const finalMsgs = [...newMsgs, { role: "assistant" as const, text: accAnswer || "（无回复内容）", ...(accThink ? { think: accThink } : {}) }];
       setMessages(finalMsgs);
       onMessagesChange(finalMsgs);
-    } catch {
-      const finalMsgs = [...newMsgs, { role: "assistant" as const, text: "抱歉，小海暂时无法回复，请稍后再试。" }];
-      setMessages(finalMsgs);
-      onMessagesChange(finalMsgs);
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        // 用户点「停止生成」:保留已流式输出的部分
+        const finalMsgs = [...newMsgs, { role: "assistant" as const, text: accAnswer || "（已停止生成）", ...(accThink ? { think: accThink } : {}) }];
+        setMessages(finalMsgs);
+        onMessagesChange(finalMsgs);
+      } else {
+        const finalMsgs = [...newMsgs, { role: "assistant" as const, text: "抱歉，小海暂时无法回复，请稍后再试。" }];
+        setMessages(finalMsgs);
+        onMessagesChange(finalMsgs);
+      }
     } finally {
       setLoading(false); setPhase("idle"); setThinkText(""); setAnswerText("");
     }
   };
 
   const isEmpty = messages.length === 0 && !loading;
+
+  // 停止生成(中断流式输出,保留已生成部分)
+  const stopStream = () => { try { abortRef.current?.abort(); } catch {} };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -180,24 +194,30 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
         </div>
       </div>
 
-      {/* 底部输入（与 WelcomeFrame ChatInputBar 同款风格） */}
+      {/* 底部输入（对齐 ChatGPT：录音态整个输入框切换为录音条；生成中发送钮变停止钮） */}
       <div style={{ flexShrink: 0, padding: "12px 0 0" }}>
         <div style={{
-          background: "#fff", borderRadius: 10,
-          border: "1px solid #dde9f7", boxShadow: "0 2px 8px rgba(26,64,140,0.06)",
+          background: voice.listening ? "#fffafa" : "#fff", borderRadius: 10,
+          border: `1px solid ${voice.listening ? "#e8a7a7" : "#dde9f7"}`, boxShadow: "0 2px 8px rgba(26,64,140,0.06)",
           display: "flex", alignItems: "flex-end", padding: "10px 12px", gap: 8, minHeight: 56,
-          maxWidth: 820, margin: "0 auto",
+          maxWidth: 820, margin: "0 auto", transition: "border-color .15s, background .15s",
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="请输入您的问题，我会尽力为您解答...（按 Enter 发送，Shift + Enter 换行）"
-              style={{ width: "100%", boxSizing: "border-box", border: "none", outline: "none", resize: "none", fontSize: 13, color: "#1a2744", background: "transparent", lineHeight: 1.6, fontFamily: "inherit", minHeight: 36, display: "block" }}
-              rows={2} />
-            {interim && <div style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", lineHeight: 1.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>正在识别：{interim}…</div>}
+            {voice.listening ? (
+              <RecordingBar elapsed={voice.elapsed} interim={interim} />
+            ) : (
+              <>
+                <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                  placeholder="请输入您的问题，我会尽力为您解答...（按 Enter 发送，Shift + Enter 换行）"
+                  style={{ width: "100%", boxSizing: "border-box", border: "none", outline: "none", resize: "none", fontSize: 13, color: "#1a2744", background: "transparent", lineHeight: 1.6, fontFamily: "inherit", minHeight: 36, display: "block" }}
+                  rows={2} />
+                {interim && <div style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", lineHeight: 1.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>正在识别：{interim}…</div>}
+              </>
+            )}
           </div>
           <MicButton listening={voice.listening} supported={voice.supported} onClick={voice.toggle} />
-          <SendButton size="md" loading={loading} disabled={!input.trim()} onClick={() => send()} />
+          <SendButton size="md" loading={loading} disabled={!input.trim() || voice.listening} onClick={() => send()} onStop={stopStream} />
         </div>
       </div>
     </div>
