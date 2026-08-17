@@ -10,8 +10,12 @@ import {
   type AssistProject,
 } from "./odiProjectData";
 import type { AssistantContext } from "./OdiProjectAssistantPanel";
-import { getIssues, type ValidationResult } from "../odi/validation/odiValidationEngine";
+import { getIssues, type ValidationCheck, type ValidationResult } from "../odi/validation/odiValidationEngine";
 import { validateOdiFull } from "../odi/validation/odiNdrcRules";
+import { RULE_EVIDENCE_REFS, defaultMaterialFor, hasEvidenceRefs } from "../odi/validation/evidenceRefs";
+import { buildMaterialDocs, lineHitsValue, type MaterialDoc } from "../odi/doc/materialDocs";
+import { allFieldDefs } from "../odi/field/odiFieldCatalog";
+import type { OdiField, OdiMaterialKey } from "../odi/data/types";
 
 type DetailTab = "overview" | "materials" | "review" | "generate";
 
@@ -150,10 +154,157 @@ function MaterialsPage({ project, onFiles, onAskAssistant }: {
 }
 
 
+// ── EvidenceDrawer — 校验问题的原文出处定位 ─────────────────
+// 右侧抽屉:按规则的证据引用(RULE_EVIDENCE_REFS)在材料模拟原文中定位证据值,
+// 命中行高亮 + 命中值加标记(不通过=红,缺失=橙)。POC 原文由 materialDocs 按字段池生成,
+// 真实 OCR 接入后替换为真实文档行,定位/展示逻辑不变。
+interface EvidenceTarget { material: OdiMaterialKey; value: string; label: string; }
+
+function collectTargets(check: ValidationCheck, pool: OdiField[]): EvidenceTarget[] {
+  const refs = RULE_EVIDENCE_REFS[check.id] ?? [];
+  const targets: EvidenceTarget[] = [];
+  const push = (t: EvidenceTarget) => { if (!targets.some(x => x.material === t.material && x.value === t.value)) targets.push(t); };
+  for (const ref of refs) {
+    const field = pool.find(f => f.code === ref.code);
+    const label = field?.name ?? allFieldDefs().find(d => d.code === ref.code)?.name ?? ref.code;
+    const mvs = (field?.materialValues ?? []).filter(m => m.value?.trim() && (!ref.materials || ref.materials.includes(m.material)));
+    if (ref.materials) {
+      // 限定材料:每个材料取其识别值;无识别值的材料回退字段主值(该侧语境的演示定位);
+      // 主值也为空(如承诺书缺正文)→ 空 value 整文档模式,定位即"缺失"本身
+      for (const material of ref.materials) {
+        const mv = mvs.find(m => m.material === material);
+        push({ material, value: mv?.value ?? field?.value?.trim() ?? "", label });
+      }
+    } else if (mvs.length > 0) {
+      for (const m of mvs) push({ material: m.material, value: m.value, label });
+    } else if (field?.value?.trim()) {
+      push({ material: defaultMaterialFor(ref.code), value: field.value, label });
+    }
+  }
+  return targets;
+}
+
+/** 行内标记命中值(第一个命中):红/橙下划线+底色 */
+function MarkedLine({ line, values, bad }: { line: string; values: string[]; bad: boolean }) {
+  for (const v of values) {
+    if (!v?.trim()) continue;
+    let idx = line.indexOf(v);
+    let len = v.length;
+    if (idx < 0) {
+      const n = v.match(/-?\d+(\.\d+)?/);
+      if (n) {
+        const m = line.match(new RegExp(`(^|[^\\d.])(${n[0].replace(/\./g, "\\.")})([^\\d.]|$)`));
+        if (m?.index !== undefined) { idx = m.index + m[1].length; len = n[0].length; }
+      }
+    }
+    if (idx >= 0) {
+      const c = bad ? { bg: "#fee2e2", color: "#b91c1c", border: "#dc2626" } : { bg: "#ffedd5", color: "#9a3412", border: "#ea580c" };
+      return (
+        <>
+          {line.slice(0, idx)}
+          <mark style={{ background: c.bg, color: c.color, fontWeight: 700, borderBottom: `2px solid ${c.border}`, borderRadius: 3, padding: "0 2px" }}>{line.slice(idx, idx + len)}</mark>
+          {line.slice(idx + len)}
+        </>
+      );
+    }
+  }
+  return <>{line}</>;
+}
+
+function EvidenceDrawer({ check, docs, pool, onClose }: {
+  check: ValidationCheck; docs: MaterialDoc[]; pool: OdiField[]; onClose: () => void;
+}) {
+  const bad = check.status === "不通过";
+  const targets = collectTargets(check, pool);
+  // 按材料分组(保持引用顺序)
+  const grouped: { material: OdiMaterialKey; items: EvidenceTarget[] }[] = [];
+  for (const t of targets) {
+    const g = grouped.find(x => x.material === t.material);
+    if (g) g.items.push(t); else grouped.push({ material: t.material, items: [t] });
+  }
+  const lineColors = bad
+    ? { rowBg: "#fef2f2", rowBorder: "#dc2626", tip: "#b91c1c" }
+    : { rowBg: "#fff7ed", rowBorder: "#ea580c", tip: "#9a3412" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 60 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,0.38)" }} />
+      <div style={{
+        position: "absolute", top: 0, right: 0, bottom: 0, width: 560, maxWidth: "92vw",
+        background: "#fff", boxShadow: "-8px 0 32px rgba(15,23,42,0.18)", display: "flex", flexDirection: "column",
+      }}>
+        {/* Header */}
+        <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #e8edf5", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 15 }}>📄</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#111827", flex: 1 }}>{check.field}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, color: bad ? "#dc2626" : "#d97706", background: bad ? "#fef2f2" : "#fff7ed", border: `1px solid ${bad ? "#fecaca" : "#fed7aa"}` }}>{check.status}</span>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 16, color: "#9ca3af", cursor: "pointer", padding: "0 2px" }}>✕</button>
+          </div>
+          {check.evidence && <div style={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.6 }}>{check.evidence}</div>}
+          <div style={{ marginTop: 6, fontSize: 10.5, color: "#94a3b8" }}>原文为 POC 模拟文档（按材料模板从字段池生成）；真实 OCR 接入后展示真实原文</div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "14px 20px 24px" }}>
+          {grouped.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: "#9ca3af", padding: "24px 0", textAlign: "center" }}>该问题没有可定位的原文证据（如字段必填缺失）</div>
+          ) : grouped.map(g => {
+            const doc = docs.find(d => d.material === g.material);
+            const values = g.items.map(i => i.value).filter(Boolean);
+            const wholeDoc = values.length === 0; // 无值 → 整文档模式(关键表述缺失类问题)
+            const hitLines = wholeDoc ? [] : [...new Set(values.flatMap(v => doc ? hitLineIndexes(doc, v) : []))];
+            return (
+              <div key={g.material} style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "#1e40af" }}>{doc?.title ?? g.material}</span>
+                  {!wholeDoc && hitLines.length > 0 && (
+                    <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 4, color: lineColors.tip, background: bad ? "#fef2f2" : "#fff7ed", border: `1px solid ${bad ? "#fecaca" : "#fed7aa"}` }}>命中 {hitLines.length} 处</span>
+                  )}
+                </div>
+                {wholeDoc && (
+                  <div style={{ fontSize: 11, color: lineColors.tip, background: bad ? "#fef2f2" : "#fff7ed", border: `1px solid ${bad ? "#fecaca" : "#fed7aa"}`, borderRadius: 6, padding: "6px 10px", marginBottom: 8 }}>
+                    未定位到「{g.items[0].label}」相关表述 —— 可能与问题本身相关（关键内容缺失）
+                  </div>
+                )}
+                {!wholeDoc && hitLines.length === 0 && (
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 8 }}>未在本文档原文中定位到证据值（{values.map(v => (v.length > 24 ? `${v.slice(0, 24)}…` : v)).join(" / ")}）</div>
+                )}
+                <div style={{ border: "1px solid #e8edf5", borderRadius: 10, overflow: "hidden", background: "#fbfcfe" }}>
+                  {(doc?.lines ?? ["（文档未生成）"]).map((line, i) => {
+                    const isHit = hitLines.includes(i);
+                    return (
+                      <div key={i} style={{
+                        padding: "5px 12px", fontSize: 12, lineHeight: 1.7, color: isHit ? "#1f2937" : "#64748b",
+                        background: isHit ? lineColors.rowBg : "transparent",
+                        borderLeft: isHit ? `3px solid ${lineColors.rowBorder}` : "3px solid transparent",
+                        whiteSpace: "pre-wrap", wordBreak: "break-all",
+                      }}>
+                        {isHit ? <MarkedLine line={line} values={values} bad={bad} /> : line}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function hitLineIndexes(doc: MaterialDoc, value: string): number[] {
+  const hits: number[] = [];
+  doc.lines.forEach((l, i) => { if (lineHitsValue(l, value)) hits.push(i); });
+  return hits;
+}
+
 // ── ReviewPage — 材料校验中心 ─────────────────────────────
-function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: {
+function ReviewPage({ project, validation, onLocate, onStartValidation, onAskAssistant }: {
   project: AssistProject;
   validation: ValidationResult;
+  onLocate: (check: ValidationCheck) => void;
   onStartValidation: () => void;
   onAskAssistant?: (ctx: AssistantContext) => void;
 }) {
@@ -161,6 +312,7 @@ function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: 
   const allIssues = getIssues(validation).map(c => ({
     id: c.id, dept: deptLabel(c.domain), field: c.field,
     conclusion: c.status as "不通过" | "缺失", evidence: c.evidence, suggestion: c.suggestion,
+    locatable: hasEvidenceRefs(c.id), raw: c,
   }));
   const filtered = allIssues.filter(i => i.dept === activeDept);
 
@@ -296,8 +448,14 @@ function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: 
                 {issue.suggestion && (
                   <div style={{ padding: "8px 12px", borderRadius: 8, background: "#fff7ed", fontSize: 12, color: "#92400e", lineHeight: 1.6, marginBottom: 10 }}>💡 {issue.suggestion}</div>
                 )}
-                <button onClick={() => onAskAssistant?.({ type: "project", projectId: project.id, projectName: project.name })}
-                  style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11.5, color: "#1a5bc6", cursor: "pointer" }}>问小海如何处理</button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {issue.locatable && (
+                    <button onClick={() => onLocate(issue.raw)}
+                      style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #fde68a", background: "#fffbeb", fontSize: 11.5, color: "#92400e", cursor: "pointer", fontWeight: 600 }}>📄 原文出处</button>
+                  )}
+                  <button onClick={() => onAskAssistant?.({ type: "project", projectId: project.id, projectName: project.name })}
+                    style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11.5, color: "#1a5bc6", cursor: "pointer" }}>问小海如何处理</button>
+                </div>
               </div>
             );
           })}
@@ -693,6 +851,7 @@ function OverviewPage({ project, validation, onTab, onStartValidation, onAskAssi
 // ── Main ──────────────────────────────────────────────────
 export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, onAskAssistant }: Props) {
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
+  const [locateCheck, setLocateCheck] = useState<ValidationCheck | null>(null);
   const timersRef = useRef<number[]>([]);
   const cfg = PROJECT_STATUS_CONFIG[project.status];
 
@@ -700,6 +859,11 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
   // P2:组合引擎 = 商务线 13 条即时校验 + 发改委规则族(含构成行明细/资金覆盖/承诺书请示)
   const validation = useMemo(
     () => validateOdiFull(project.fieldPool ?? [], { contributionRows: project.contributionRows }),
+    [project.fieldPool, project.contributionRows],
+  );
+  // 材料模拟原文(证据定位用;POC 按字段池生成,OCR 接入后换真实文档行)
+  const materialDocs = useMemo(
+    () => buildMaterialDocs(project.fieldPool ?? [], project.contributionRows ?? []),
     [project.fieldPool, project.contributionRows],
   );
 
@@ -796,9 +960,14 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         {activeTab === "overview"   && <OverviewPage   project={project} validation={validation} onTab={setActiveTab} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
         {activeTab === "materials"  && <MaterialsPage  project={project} onFiles={handleFiles} onAskAssistant={onAskAssistant} />}
-        {activeTab === "review"     && <ReviewPage     project={project} validation={validation} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
+        {activeTab === "review"     && <ReviewPage     project={project} validation={validation} onLocate={setLocateCheck} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
         {activeTab === "generate"   && <GeneratePage   project={project} onAskAssistant={onAskAssistant} />}
       </div>
+
+      {/* 证据定位抽屉(原文出处) */}
+      {locateCheck && (
+        <EvidenceDrawer check={locateCheck} docs={materialDocs} pool={project.fieldPool ?? []} onClose={() => setLocateCheck(null)} />
+      )}
     </div>
   );
 }
