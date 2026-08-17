@@ -1,28 +1,25 @@
-import { useState } from "react";
-import { MOCK_ODI_PROJECTS, PROJECT_STATUS_CONFIG, type AssistProject } from "./odiProjectData";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  PROJECT_STATUS_CONFIG,
+  guessMaterialMeta,
+  progressFromStatus,
+  statusAfterValidation,
+  seedAssistFieldPool,
+  type AssistMaterialFile,
+  type AssistProject,
+} from "./odiProjectData";
 import type { AssistantContext } from "./OdiProjectAssistantPanel";
-import { createGuideProject } from "../odi/data/odiProjects";
-import { commitField } from "../odi/field/odiGuideLogic";
-import { validateOdiPool, getIssues, type ValidationCheck } from "../odi/validation/odiValidationEngine";
+import { validateOdiPool, getIssues, type ValidationResult } from "../odi/validation/odiValidationEngine";
 
 type DetailTab = "overview" | "materials" | "review" | "generate";
 
 interface Props {
-  projectId: string;
+  project: AssistProject;
+  onUpdate: (patch: Partial<AssistProject> | ((p: AssistProject) => Partial<AssistProject>)) => void;
   onBack: () => void;
   onGoToList: () => void;
   onAskAssistant?: (ctx: AssistantContext) => void;
 }
-
-// ── Material rows ─────────────────────────────────────────
-const MATERIAL_ROWS = [
-  { id: "m1", name: "境外投资备案申请表.pdf", type: "政府申报表", scope: "商务委", uploadedAt: "2026-07-27 14:30", recog: "已识别", check: "不通过" },
-  { id: "m2", name: "可行性研究报告.pdf", type: "企业内部文件", scope: "发改委", uploadedAt: "2026-07-27 10:15", recog: "已识别", check: "通过" },
-  { id: "m3", name: "董事会决议.pdf", type: "企业内部文件", scope: "商务委+发改委", uploadedAt: "2026-07-26 16:00", recog: "已识别", check: "通过" },
-  { id: "m4", name: "企业营业执照副本.pdf", type: "证照文件", scope: "商务委+发改委", uploadedAt: "2026-07-26 15:45", recog: "已识别", check: "通过" },
-  { id: "m5", name: "法人授权委托书.pdf", type: "授权文件", scope: "商务委", uploadedAt: "2026-07-25 09:00", recog: "识别中", check: "待校验" },
-  { id: "m6", name: "资产负债表（最近3年）.xlsx", type: "财务报表", scope: "发改委", uploadedAt: "2026-07-24 17:30", recog: "已识别", check: "缺失" },
-];
 
 const RECOG_COLORS: Record<string, { color: string; bg: string; border: string }> = {
   "已识别": { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
@@ -41,44 +38,61 @@ const CONCLUSION_CFG: Record<string, { color: string; bg: string; border: string
   "不通过": { color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
   "缺失":   { color: "#d97706", bg: "#fff7ed", border: "#fed7aa" },
 };
-const ACTIVITY = [
-  { text: "发现投资总额不一致（商务委 · 差额300万）", time: "今天 14:35", icon: "!", color: "#dc2626", bg: "#fef2f2" },
-  { text: "上传境外投资备案申请表（V3版本）", time: "今天 14:30", icon: "↑", color: "#1a5bc6", bg: "#eff6ff" },
-  { text: "完成材料版本V2校验（发现3项问题）", time: "今天 14:32", icon: "✓", color: "#16a34a", bg: "#f0fdf4" },
-  { text: "完成V1校验（通过8项）", time: "2026-07-26", icon: "✓", color: "#16a34a", bg: "#f0fdf4" },
-  { text: "创建助办项目", time: "2026-07-25", icon: "★", color: "#1a5bc6", bg: "#eff6ff" },
-];
-
-// 申报助办「已解析字段池」—— 真实上传/解析未建,先用预设池模拟,并注入几处典型问题
-// (注册资本>总额、项目说明缺失、境外企业名缺失)以演示三态校验。引擎就绪后直接接真实解析结果。
-const ASSIST_FIELD_POOL = (() => {
-  let pool = createGuideProject("助办示例(模拟已解析)", "新设独资", "快速体验").fieldPool;
-  pool = commitField(pool, "overseas_registered_capital", "900万美元", "upload"); // 注册资本>总额 → 商务委不通过
-  pool = commitField(pool, "project_summary", "", "upload");                       // 项目说明缺失 → 发改委缺失
-  pool = commitField(pool, "overseas_company_cn", "", "upload");                   // 境外企业名缺失 → 跨业务缺失
-  return pool;
-})();
-const ASSIST_VALIDATION = validateOdiPool(ASSIST_FIELD_POOL);
 const deptLabel = (d: string): "商务委" | "发改委" | "跨部门" => (d === "跨业务" ? "跨部门" : d as "商务委" | "发改委");
 
-const DEPT_RESULTS = ASSIST_VALIDATION.summaries.map(s => ({
-  dept: deptLabel(s.dept),
-  passed: s.passed, failed: s.failed, missing: s.missing, triggered: true, total: s.total, checkedAt: "刚刚",
-}));
+// 最近活动从项目实际状态推导（原先写死越南项目历史，新建项目也显示别人的活动）
+function buildActivity(project: AssistProject): { icon: string; text: string; time: string; color: string; bg: string }[] {
+  const items: { icon: string; text: string; time: string; color: string; bg: string }[] = [
+    { icon: "★", text: "创建助办项目", time: project.updatedAt, color: "#1a5bc6", bg: "#eff6ff" },
+  ];
+  if (project.materials.length > 0) {
+    items.unshift({ icon: "↑", text: `上传材料 ${project.materials.length} 份（材料版本 V${project.materialVersion}）`, time: project.updatedAt, color: "#1a5bc6", bg: "#eff6ff" });
+  }
+  if (project.validatedAt) {
+    items.unshift({ icon: "✓", text: `完成材料校验（不通过 ${project.mismatchCount} 项 / 缺失 ${project.missingCount} 项）`, time: project.validatedAt, color: project.mismatchCount + project.missingCount > 0 ? "#d97706" : "#16a34a", bg: project.mismatchCount + project.missingCount > 0 ? "#fff7ed" : "#f0fdf4" });
+  }
+  if (project.status === "材料校验中") {
+    items.unshift({ icon: "…", text: "正在进行材料识别与三域校验", time: "刚刚", color: "#1e40af", bg: "#eff6ff" });
+  }
+  return items.slice(0, 5);
+}
 
 // ── MaterialsPage ─────────────────────────────────────────
-function MaterialsPage({ project, onAskAssistant }: { project: AssistProject; onAskAssistant?: (ctx: AssistantContext) => void }) {
+function MaterialsPage({ project, onFiles, onAskAssistant }: {
+  project: AssistProject;
+  onFiles: (files: FileList | File[]) => void;
+  onAskAssistant?: (ctx: AssistantContext) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const locked = project.status === "材料校验中"; // 校验中锁定上传（流程文档 §7.5）
+  const rows = project.materials;
+
+  const pick = () => { if (!locked) fileInputRef.current?.click(); };
+
   return (
     <div style={{ padding: "24px 44px", overflowY: "auto", flex: 1 }}>
-      <div style={{ border: "2px dashed #93c5fd", borderRadius: 12, padding: "28px", textAlign: "center", background: "#eff6ff", marginBottom: 24, cursor: "pointer" }}
-        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = "#dbeafe")}
-        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = "#eff6ff")}
+      <input
+        ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" style={{ display: "none" }}
+        onChange={e => { if (e.target.files?.length) onFiles(e.target.files); e.target.value = ""; }}
+      />
+      <div
+        onClick={pick}
+        onDragOver={e => { if (!locked) e.preventDefault(); }}
+        onDrop={e => { e.preventDefault(); if (!locked && e.dataTransfer?.files?.length) onFiles(e.dataTransfer.files); }}
+        style={{
+          border: `2px dashed ${locked ? "#cbd5e1" : "#93c5fd"}`, borderRadius: 12, padding: "28px", textAlign: "center",
+          background: locked ? "#f8fafc" : "#eff6ff", marginBottom: 24, cursor: locked ? "not-allowed" : "pointer", opacity: locked ? 0.7 : 1,
+        }}
+        onMouseEnter={e => { if (!locked) (e.currentTarget as HTMLElement).style.background = "#dbeafe"; }}
+        onMouseLeave={e => { if (!locked) (e.currentTarget as HTMLElement).style.background = "#eff6ff"; }}
       >
         <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ margin: "0 auto 8px", display: "block" }}>
           <path d="M16 22V10M10 16l6-6 6 6" stroke="#1a5bc6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           <rect x="4" y="24" width="24" height="4" rx="2" fill="#bfdbfe"/>
         </svg>
-        <div style={{ fontSize: 14, color: "#1a5bc6", fontWeight: 600, marginBottom: 4 }}>拖拽文件至此，或点击上传</div>
+        <div style={{ fontSize: 14, color: "#1a5bc6", fontWeight: 600, marginBottom: 4 }}>
+          {locked ? "校验进行中，暂锁定上传" : "拖拽文件至此，或点击上传"}
+        </div>
         <div style={{ fontSize: 12, color: "#64748b" }}>支持 PDF、Word、Excel，单文件最大 50MB</div>
       </div>
       <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e8edf5", overflow: "hidden" }}>
@@ -91,11 +105,17 @@ function MaterialsPage({ project, onAskAssistant }: { project: AssistProject; on
             </tr>
           </thead>
           <tbody>
-            {MATERIAL_ROWS.map((m, i) => {
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding: "36px 14px", textAlign: "center", fontSize: 13, color: "#9ca3af" }}>
+                  尚未上传材料。上传后系统将识别分类，并进入待校验状态。
+                </td>
+              </tr>
+            ) : rows.map((m, i) => {
               const rCfg = RECOG_COLORS[m.recog] ?? RECOG_COLORS["待识别"];
               const cCfg = CHECK_COLORS[m.check] ?? CHECK_COLORS["待校验"];
               return (
-                <tr key={m.id} style={{ borderBottom: i < MATERIAL_ROWS.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                <tr key={m.id} style={{ borderBottom: i < rows.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                   <td style={{ padding: "10px 14px", fontSize: 13, color: "#1f2937", maxWidth: 180 }}>
                     <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
                   </td>
@@ -127,13 +147,30 @@ function MaterialsPage({ project, onAskAssistant }: { project: AssistProject; on
 
 
 // ── ReviewPage — 材料校验中心 ─────────────────────────────
-function ReviewPage({ project, onAskAssistant }: { project: AssistProject; onAskAssistant?: (ctx: AssistantContext) => void }) {
+function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: {
+  project: AssistProject;
+  validation: ValidationResult;
+  onStartValidation: () => void;
+  onAskAssistant?: (ctx: AssistantContext) => void;
+}) {
   const [activeDept, setActiveDept] = useState<"商务委" | "发改委" | "跨部门">("商务委");
-  const allIssues = getIssues(ASSIST_VALIDATION).map(c => ({
+  const allIssues = getIssues(validation).map(c => ({
     id: c.id, dept: deptLabel(c.domain), field: c.field,
     conclusion: c.status as "不通过" | "缺失", evidence: c.evidence, suggestion: c.suggestion,
   }));
   const filtered = allIssues.filter(i => i.dept === activeDept);
+
+  const validating = project.status === "材料校验中";
+  const noMaterials = project.materials.length === 0;
+  const versionUnchanged = project.validatedVersion === project.materialVersion; // 硬边界③：材料未变化不允许重复校验
+  const cannotRevalidate = validating || noMaterials || versionUnchanged;
+  const revalidateHint = validating ? "校验进行中" : noMaterials ? "请先上传材料" : versionUnchanged ? "材料未变化，无需重复校验" : "";
+
+  const deptResults = validation.summaries.map(s => ({
+    dept: deptLabel(s.dept),
+    passed: s.passed, failed: s.failed, missing: s.missing, triggered: true, total: s.total,
+    checkedAt: project.validatedAt ?? "—",
+  }));
 
   return (
     <div style={{ padding: "24px 44px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -144,13 +181,23 @@ function ReviewPage({ project, onAskAssistant }: { project: AssistProject; onAsk
 
       {/* Version notice */}
       <div style={{ background: "#f8fafc", border: "1px solid #e8edf5", borderRadius: 10, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
-        <span style={{ color: "#374151" }}>当前校验结果基于材料版本 <strong>V2</strong> · 最近校验时间：今天 14:32</span>
-        <button style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 12, color: "#1a5bc6", cursor: "pointer", fontWeight: 500 }}>重新校验</button>
+        <span style={{ color: "#374151" }}>
+          当前校验结果基于材料版本 <strong>V{project.validatedVersion ?? "-"}</strong> · 最近校验时间：{project.validatedAt ?? "未校验"}
+        </span>
+        <button
+          onClick={onStartValidation} disabled={cannotRevalidate} title={revalidateHint}
+          style={{
+            padding: "5px 14px", borderRadius: 7, border: `1px solid ${cannotRevalidate ? "#e5eaf2" : "#bfdbfe"}`,
+            background: cannotRevalidate ? "#f8fafc" : "#eff6ff", fontSize: 12,
+            color: cannotRevalidate ? "#9ca3af" : "#1a5bc6", cursor: cannotRevalidate ? "default" : "pointer", fontWeight: 500,
+          }}>
+          {validating ? "校验中…" : "重新校验"}
+        </button>
       </div>
 
       {/* 3 dept overview cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
-        {DEPT_RESULTS.map(d => {
+        {deptResults.map(d => {
           const isActive = activeDept === d.dept;
           const hasIssues = d.failed + d.missing > 0;
           const conclusion = hasIssues ? (d.failed > 0 ? "有问题" : "有缺失") : "全部通过";
@@ -335,12 +382,21 @@ function ProgressStepper({ steps }: { steps: StepStatus[] }) {
 }
 
 // ── Status Card (high weight) ─────────────────────────────
-function StatusCard({ project, onTab }: { project: AssistProject; onTab: (t: DetailTab) => void }) {
+function StatusCard({ project, validation, onTab, onStartValidation }: {
+  project: AssistProject;
+  validation: ValidationResult;
+  onTab: (t: DetailTab) => void;
+  onStartValidation: () => void;
+}) {
   const issueCount = project.mismatchCount + project.missingCount;
+  const deptIssue = (dept: string) => {
+    const s = validation.summaries.find(x => deptLabel(x.dept) === dept);
+    return s ? s.failed + s.missing : 0;
+  };
 
   const configs: Record<string, {
     bg: string; border: string; titleColor: string; title: string; desc: string;
-    btnLabel: string; btnTab: DetailTab; btnStyle: "primary" | "urgent";
+    btnLabel: string; btnTab: DetailTab; btnStyle: "primary" | "urgent"; btnAction?: "start";
   }> = {
     "待上传材料": {
       bg: "#f8fafc", border: "#e8edf5", titleColor: "#374151",
@@ -351,8 +407,8 @@ function StatusCard({ project, onTab }: { project: AssistProject; onTab: (t: Det
     "待校验": {
       bg: "#eff6ff", border: "#bfdbfe", titleColor: "#1e40af",
       title: "材料已上传，等待开始校验",
-      desc: `已上传 ${project.uploadedCount} 份材料，系统尚未开始识别与校验。`,
-      btnLabel: "开始智能校验", btnTab: "review", btnStyle: "primary",
+      desc: `已上传 ${project.materials.length} 份材料，系统尚未开始识别与校验。`,
+      btnLabel: "开始智能校验", btnTab: "review", btnStyle: "primary", btnAction: "start",
     },
     "材料校验中": {
       bg: "#eff6ff", border: "#bfdbfe", titleColor: "#1e40af",
@@ -363,7 +419,7 @@ function StatusCard({ project, onTab }: { project: AssistProject; onTab: (t: Det
     "待处理": {
       bg: "#fff7ed", border: "#fed7aa", titleColor: "#92400e",
       title: `本次校验发现 ${issueCount} 个待处理问题`,
-      desc: `不通过 ${project.mismatchCount} 项，缺失 ${project.missingCount} 项。商务委 ${DEPT_RESULTS[0].failed + DEPT_RESULTS[0].missing} 项，发改委 ${DEPT_RESULTS[1].failed + DEPT_RESULTS[1].missing} 项，跨部门 ${DEPT_RESULTS[2].failed + DEPT_RESULTS[2].missing} 项。`,
+      desc: `不通过 ${project.mismatchCount} 项，缺失 ${project.missingCount} 项。商务委 ${deptIssue("商务委")} 项，发改委 ${deptIssue("发改委")} 项，跨部门 ${deptIssue("跨部门")} 项。`,
       btnLabel: `查看并处理 ${issueCount} 个问题`, btnTab: "review", btnStyle: "urgent",
     },
     "已完成": {
@@ -384,31 +440,38 @@ function StatusCard({ project, onTab }: { project: AssistProject; onTab: (t: Det
           <div style={{ fontSize: 16, fontWeight: 800, color: cfg.titleColor, lineHeight: 1.35, marginBottom: 8 }}>{cfg.title}</div>
           <div style={{ fontSize: 12, color: cfg.titleColor, opacity: 0.8, lineHeight: 1.6 }}>{cfg.desc}</div>
         </div>
-        <button onClick={() => onTab(cfg.btnTab)} style={{
-          padding: "11px 24px", borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", flexShrink: 0,
-          background: cfg.btnStyle === "urgent" ? "#dc2626" : "#1a5bc6",
-          color: "#fff", boxShadow: "0 2px 10px rgba(0,0,0,0.18)", alignSelf: "center",
-        }}>{cfg.btnLabel}</button>
+        <button
+          onClick={() => {
+            if (cfg.btnAction === "start") { onTab(cfg.btnTab); onStartValidation(); }
+            else onTab(cfg.btnTab);
+          }}
+          style={{
+            padding: "11px 24px", borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+            background: cfg.btnStyle === "urgent" ? "#dc2626" : "#1a5bc6",
+            color: "#fff", boxShadow: "0 2px 10px rgba(0,0,0,0.18)", alignSelf: "center",
+          }}>{cfg.btnLabel}</button>
       </div>
     </div>
   );
 }
 
 // ── Four core result cards ────────────────────────────────
-function ResultCards({ project, onTab }: { project: AssistProject; onTab: (t: DetailTab) => void }) {
-  const mofcom = DEPT_RESULTS.find(d => d.dept === "商务委")!;
-  const ndrc = DEPT_RESULTS.find(d => d.dept === "发改委")!;
-  const cross = DEPT_RESULTS.find(d => d.dept === "跨部门")!;
+function ResultCards({ project, validation, onTab }: { project: AssistProject; validation: ValidationResult; onTab: (t: DetailTab) => void }) {
+  const summary = (dept: string) => validation.summaries.find(x => deptLabel(x.dept) === dept)!;
+  const mofcom = summary("商务委");
+  const ndrc = summary("发改委");
+  const cross = summary("跨部门");
+  const recognized = project.materials.filter(m => m.recog === "已识别").length;
 
   const cards = [
     {
       title: "材料情况",
       onClick: () => onTab("materials"),
       rows: [
-        { label: "已上传材料", value: `${project.uploadedCount} 份`, color: "#1a5bc6" },
-        { label: "已识别", value: "5 份", color: "#16a34a" },
-        { label: "无法识别", value: "0 份", color: "#9ca3af" },
-        { label: "当前版本", value: "V2", color: "#374151" },
+        { label: "已上传材料", value: `${project.materials.length} 份`, color: "#1a5bc6" },
+        { label: "已识别", value: `${recognized} 份`, color: "#16a34a" },
+        { label: "识别中", value: `${project.materials.length - recognized} 份`, color: "#9ca3af" },
+        { label: "当前版本", value: `V${project.materialVersion}`, color: "#374151" },
       ],
       conclusion: null,
     },
@@ -511,8 +574,22 @@ function NextStepCard({ project, onTab }: { project: AssistProject; onTab: (t: D
 }
 
 // ── OverviewPage ──────────────────────────────────────────
-function OverviewPage({ project, onTab, onAskAssistant }: { project: AssistProject; onTab: (t: DetailTab) => void; onAskAssistant?: (ctx: AssistantContext) => void }) {
-  const stepStatuses: StepStatus[] = ["done", "done", "done", "current", "pending"];
+function OverviewPage({ project, validation, onTab, onStartValidation, onAskAssistant }: {
+  project: AssistProject;
+  validation: ValidationResult;
+  onTab: (t: DetailTab) => void;
+  onStartValidation: () => void;
+  onAskAssistant?: (ctx: AssistantContext) => void;
+}) {
+  const stepStatuses: StepStatus[] = progressFromStatus(project.status);
+  const activity = buildActivity(project);
+  // 关键待办 = 校验引擎实算问题 Top3（原先写死 3 条越南项目的假待办）
+  const todos = getIssues(validation).slice(0, 3).map(c => ({
+    text: `${c.field} — ${c.suggestion}`,
+    issueId: c.id,
+    dept: deptLabel(c.domain),
+    urgent: c.status === "不通过",
+  }));
 
   return (
     <div style={{ padding: "24px 44px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 18 }}>
@@ -523,10 +600,9 @@ function OverviewPage({ project, onTab, onAskAssistant }: { project: AssistProje
           <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "center" }}>
             <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 6, color: "#1e40af", background: "#eff6ff", border: "1px solid #bfdbfe" }}>申报助办</span>
             {[
-              { label: "投资国家", value: "越南" },
               { label: "投资方式", value: project.investmentType ?? "新设" },
-              { label: "材料版本", value: "V2" },
-              { label: "最近更新", value: "2026年8月4日 14:30" },
+              { label: "材料版本", value: `V${project.materialVersion}` },
+              { label: "最近更新", value: project.updatedAt },
             ].map(f => (
               <div key={f.label}>
                 <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 2 }}>{f.label}</div>
@@ -547,10 +623,10 @@ function OverviewPage({ project, onTab, onAskAssistant }: { project: AssistProje
       </div>
 
       {/* High-weight status card */}
-      <StatusCard project={project} onTab={onTab} />
+      <StatusCard project={project} validation={validation} onTab={onTab} onStartValidation={onStartValidation} />
 
       {/* 4 core result cards */}
-      <ResultCards project={project} onTab={onTab} />
+      <ResultCards project={project} validation={validation} onTab={onTab} />
 
       {/* Next step recommendation — single prominent CTA */}
       <NextStepCard project={project} onTab={onTab} />
@@ -560,12 +636,10 @@ function OverviewPage({ project, onTab, onAskAssistant }: { project: AssistProje
         {/* Todos */}
         <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e8edf5", padding: "18px 20px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>关键待办</div>
-          {[
-            { text: "修正商务委申请表投资金额（不一致，差额300万）", issueId: "i1", dept: "商务委", urgent: true },
-            { text: "补充可研报告环评章节（发改委缺失）", issueId: "i3", dept: "发改委", urgent: false },
-            { text: "更新法人授权书（有效期已过）", issueId: "i2", dept: "商务委", urgent: true },
-          ].map((todo, i, arr) => (
-            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, paddingBottom: i < arr.length - 1 ? 10 : 0, marginBottom: i < arr.length - 1 ? 10 : 0, borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+          {todos.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#9ca3af", padding: "8px 0" }}>暂无待办事项</div>
+          ) : todos.map((todo, i, arr) => (
+            <div key={todo.issueId} style={{ display: "flex", alignItems: "flex-start", gap: 8, paddingBottom: i < arr.length - 1 ? 10 : 0, marginBottom: i < arr.length - 1 ? 10 : 0, borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: todo.urgent ? "#dc2626" : "#f59e0b", flexShrink: 0, marginTop: 4 }} />
               <span style={{ fontSize: 12, color: "#374151", flex: 1, lineHeight: 1.5 }}>{todo.text}</span>
               <button onClick={() => onAskAssistant?.({ type: "issue", projectId: project.id, projectName: project.name, issueId: todo.issueId, issueName: todo.text, department: todo.dept })}
@@ -577,8 +651,8 @@ function OverviewPage({ project, onTab, onAskAssistant }: { project: AssistProje
         {/* Activity */}
         <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e8edf5", padding: "18px 20px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>最近活动</div>
-          {ACTIVITY.map((a, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < ACTIVITY.length - 1 ? 10 : 0, paddingBottom: i < ACTIVITY.length - 1 ? 10 : 0, borderBottom: i < ACTIVITY.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+          {activity.map((a, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < activity.length - 1 ? 10 : 0, paddingBottom: i < activity.length - 1 ? 10 : 0, borderBottom: i < activity.length - 1 ? "1px solid #f1f5f9" : "none" }}>
               <span style={{ width: 22, height: 22, borderRadius: "50%", background: a.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flexShrink: 0, color: a.color, fontWeight: 700 }}>{a.icon}</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.4 }}>{a.text}</div>
@@ -593,11 +667,64 @@ function OverviewPage({ project, onTab, onAskAssistant }: { project: AssistProje
 }
 
 // ── Main ──────────────────────────────────────────────────
-export function OdiProjectDetailPage({ projectId, onBack, onGoToList, onAskAssistant }: Props) {
+export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, onAskAssistant }: Props) {
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
-  const rawProject = MOCK_ODI_PROJECTS.find(p => p.id === projectId) ?? MOCK_ODI_PROJECTS[0];
-  const project = rawProject as AssistProject;
+  const timersRef = useRef<number[]>([]);
   const cfg = PROJECT_STATUS_CONFIG[project.status];
+
+  // 校验中心/驾驶舱全部吃项目自身字段池的实算结果（原先用模块级写死演示池）
+  const validation = useMemo(() => validateOdiPool(project.fieldPool ?? []), [project.fieldPool]);
+
+  // 卸载时清掉识别/校验的演示定时器
+  useEffect(() => () => { timersRef.current.forEach(t => window.clearTimeout(t)); }, []);
+  const later = (fn: () => void, ms: number) => { timersRef.current.push(window.setTimeout(fn, ms)); };
+
+  /** 上传：追加了材料行 → 待校验；首传注入演示字段池；1.2s 后置为已识别（POC 演示，未接 OCR）。 */
+  const handleFiles = (files: FileList | File[]) => {
+    if (project.status === "材料校验中") return; // 校验中锁定上传
+    const rows: AssistMaterialFile[] = Array.from(files).map((f, i) => ({
+      id: `m${Date.now()}-${i}`,
+      name: f.name,
+      ...guessMaterialMeta(f.name),
+      uploadedAt: "刚刚",
+      recog: "识别中",
+      check: "待校验" as const,
+    }));
+    const firstUpload = project.materials.length === 0;
+    const nextCount = project.materials.length + rows.length;
+    onUpdate({
+      materials: [...project.materials, ...rows],
+      uploadedCount: nextCount,
+      materialVersion: project.materialVersion + 1,
+      status: "待校验",
+      // POC 演示：未接 OCR，首次上传后按场景预设模拟"已解析"（含 3 处典型问题演示三态校验）
+      ...(firstUpload && !project.fieldPool ? { fieldPool: seedAssistFieldPool(true) } : {}),
+    });
+    later(() => {
+      onUpdate(p => ({ materials: p.materials.map(m => (m.recog === "识别中" ? { ...m, recog: "已识别" as const } : m)) }));
+    }, 1200);
+  };
+
+  /** 开始/重新校验：材料校验中 → 1.6s 后按引擎实算落库（状态、三域计数、版本、时间）。 */
+  const runValidation = () => {
+    if (project.materials.length === 0 || project.status === "材料校验中") return;
+    onUpdate({ status: "材料校验中" });
+    const { failed, missing, passed } = validation.summaries.reduce(
+      (acc, s) => ({ failed: acc.failed + s.failed, missing: acc.missing + s.missing, passed: acc.passed + s.passed }),
+      { failed: 0, missing: 0, passed: 0 },
+    );
+    later(() => {
+      onUpdate({
+        status: statusAfterValidation(failed, missing),
+        mismatchCount: failed,
+        missingCount: missing,
+        passedCount: passed,
+        validatedAt: "刚刚",
+        validatedVersion: project.materialVersion,
+        materials: project.materials.map(m => (m.recog === "识别中" ? { ...m, recog: "已识别" as const } : m)),
+      });
+    }, 1600);
+  };
 
   const TABS: { key: DetailTab; label: string }[] = [
     { key: "overview", label: "项目驾驶舱" },
@@ -639,9 +766,9 @@ export function OdiProjectDetailPage({ projectId, onBack, onGoToList, onAskAssis
 
       {/* Content */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        {activeTab === "overview"   && <OverviewPage   project={project} onTab={setActiveTab} onAskAssistant={onAskAssistant} />}
-        {activeTab === "materials"  && <MaterialsPage  project={project} onAskAssistant={onAskAssistant} />}
-        {activeTab === "review"     && <ReviewPage     project={project} onAskAssistant={onAskAssistant} />}
+        {activeTab === "overview"   && <OverviewPage   project={project} validation={validation} onTab={setActiveTab} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
+        {activeTab === "materials"  && <MaterialsPage  project={project} onFiles={handleFiles} onAskAssistant={onAskAssistant} />}
+        {activeTab === "review"     && <ReviewPage     project={project} validation={validation} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
         {activeTab === "generate"   && <GeneratePage   project={project} onAskAssistant={onAskAssistant} />}
       </div>
     </div>

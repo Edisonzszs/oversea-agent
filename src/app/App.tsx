@@ -268,6 +268,8 @@ export default function App() {
         passedCount: 0,
         generatedCount: 0,
         updatedAt: "刚刚",
+        materials: [],
+        materialVersion: 0,
       };
       setProjects(prev => [p, ...prev]);
       setShowNewProjectModal(false);
@@ -311,6 +313,19 @@ export default function App() {
   const handleDeleteOdiProject = (id: string) => {
     setProjects(prev => prev.filter(p => p.id !== id));
     if (activeProjectId === id) { setActiveProjectId(null); setMode("odi-list"); }
+  };
+
+  // ODI 助办项目增量更新(详情页上传/校验/状态机驱动)。patch 支持函数式,拿到最新 project,
+  // 避免定时器回调里用旧闭包的 materials 数组覆盖并发上传。
+  const handleUpdateOdiProject = (
+    id: string,
+    patch: Partial<AssistProject> | ((p: AssistProject) => Partial<AssistProject>),
+  ) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== id || p.serviceType !== "assist") return p;
+      const resolved = typeof patch === "function" ? patch(p) : patch;
+      return { ...p, ...resolved, updatedAt: "刚刚" };
+    }));
   };
 
   const handleAskAssistant = (ctx: AssistantContext) => {
@@ -500,7 +515,9 @@ export default function App() {
           {/* ODI assist project mode */}
           {mode === "odi-project" && activeProject && activeProject.serviceType === "assist" && (
             <OdiProjectDetailPage
-              projectId={activeProject.id}
+              key={activeProject.id}
+              project={activeProject as AssistProject}
+              onUpdate={patch => handleUpdateOdiProject(activeProject.id, patch)}
               onBack={() => { setMode("odi-list"); setActiveProjectId(null); }}
               onGoToList={() => { setMode("odi-list"); setActiveProjectId(null); }}
               onAskAssistant={handleAskAssistant}
