@@ -24,15 +24,16 @@ echo "══ 2/4 构建(vite build → dist-prod) ══"
 npm run build
 
 STAMP="${TAG#v}"
-PKG="/tmp/${PKG_PREFIX}-${STAMP}.zip"
+PKG="/tmp/${PKG_PREFIX}-${STAMP}.tar.gz"
 rm -f "$PKG"
-( cd dist-prod && powershell -Command "Compress-Archive -Path '*' -DestinationPath '$(cygpath -w "$PKG" 2>/dev/null || echo "$PKG")' -Force" )
+# 用 tar 打包:Compress-Archive 产的 zip 用反斜杠路径,Linux unzip 解不开(2026-08-17 实测)
+( cd dist-prod && tar -czf "$PKG" . )
 echo "包: $PKG ($(du -h "$PKG" | cut -f1))"
 
 echo "══ 3/4 创建 tag + Release ══"
 gh release create "$TAG" --title "$TITLE" \
   --notes "## 部署包
-- \`${PKG_PREFIX}-${STAMP}.zip\` — ${NOTE}
+- \`${PKG_PREFIX}-${STAMP}.tar.gz\` — ${NOTE}
 
 ## 源码
 Source code (zip/tar.gz) 见页面底部 Assets；或 \`git clone -b $TAG https://github.com/$REPO.git\`
