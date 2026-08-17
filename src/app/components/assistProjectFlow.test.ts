@@ -6,9 +6,10 @@ import {
   seedAssistFieldPool,
 } from "./odiProjectData";
 import { validateOdiFull } from "../odi/validation/odiNdrcRules";
+import { DEMO_CONTRIBUTION_ROWS } from "./odiProjectData";
 
 function totals(pool: ReturnType<typeof seedAssistFieldPool>) {
-  const r = validateOdiFull(pool);
+  const r = validateOdiFull(pool, { contributionRows: DEMO_CONTRIBUTION_ROWS });
   const sum = (k: "passed" | "failed" | "missing") => r.summaries.reduce((n, s) => n + s[k], 0);
   return { passed: sum("passed"), failed: sum("failed"), missing: sum("missing") };
 }
@@ -54,16 +55,16 @@ describe("progressFromStatus — 五步办理进度推导", () => {
 });
 
 describe("seedAssistFieldPool — 助办演示字段池", () => {
-  it("注入问题池：2 不通过 + 2 缺失（与 mock p1 计数口径一致,P2 含 NDRC）", () => {
+  it("注入问题池：3 不通过 + 2 缺失（与 mock p1 计数口径一致,P2 全量 NDRC）", () => {
     const t = totals(seedAssistFieldPool(true));
-    expect(t.failed).toBe(2);   // 商务线 regcap(注册资本900>800) + NDRC-A-006(USCC 执照≠备案表)
+    expect(t.failed).toBe(3);   // 商务线 regcap + NDRC-A-006(USCC) + NDRC-C-009(承诺书缺责任表述)
     expect(t.missing).toBe(2);  // 项目说明、境外企业名 → 发改委/跨业务缺失
-    expect(t.passed).toBe(29);
+    expect(t.passed).toBe(41);
   });
-  it("干净池：全部通过（与 mock p3 计数口径一致,P2 含 NDRC 8 条）", () => {
+  it("干净池：全部通过（与 mock p3 计数口径一致,P2 全量 NDRC）", () => {
     const t = totals(seedAssistFieldPool(false));
     expect(t.failed).toBe(0);
     expect(t.missing).toBe(0);
-    expect(t.passed).toBe(33);
+    expect(t.passed).toBe(46);
   });
 });

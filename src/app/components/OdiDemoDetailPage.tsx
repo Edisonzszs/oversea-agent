@@ -395,15 +395,16 @@ function caseToPool(scene: Scene, overrides: Record<string, string> = {}): OdiFi
   return pool;
 }
 
-// 校验四态 → 展示样式
-const CHECK_DISPLAY: Record<"ok" | "adjust" | "missing" | "skip", { label: string; color: string; bg: string; border: string }> = {
-  ok:      { label: "通过",     color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
-  adjust:  { label: "不通过",   color: "#d97706", bg: "#fff7ed", border: "#fde68a" },
-  missing: { label: "缺失",     color: "#b45309", bg: "#fff7ed", border: "#fed7aa" },
-  skip:    { label: "未触发",   color: "#64748b", bg: "#f8fafc", border: "#e8edf5" },
+// 校验五态 → 展示样式
+const CHECK_DISPLAY: Record<"ok" | "adjust" | "missing" | "skip" | "blocked", { label: string; color: string; bg: string; border: string }> = {
+  ok:       { label: "通过",     color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
+  adjust:   { label: "不通过",   color: "#d97706", bg: "#fff7ed", border: "#fde68a" },
+  missing:  { label: "缺失",     color: "#b45309", bg: "#fff7ed", border: "#fed7aa" },
+  skip:     { label: "未触发",   color: "#64748b", bg: "#f8fafc", border: "#e8edf5" },
+  blocked:  { label: "口径待定", color: "#7c3aed", bg: "#f5f3ff", border: "#ddd6fe" },
 };
 function checkDisplay(status: string) {
-  return status === "通过" ? CHECK_DISPLAY.ok : status === "不通过" ? CHECK_DISPLAY.adjust : status === "未触发" ? CHECK_DISPLAY.skip : CHECK_DISPLAY.missing;
+  return status === "通过" ? CHECK_DISPLAY.ok : status === "不通过" ? CHECK_DISPLAY.adjust : status === "未触发" ? CHECK_DISPLAY.skip : status === "blocked" ? CHECK_DISPLAY.blocked : CHECK_DISPLAY.missing;
 }
 
 function VerifyTab({ result }: { result: ValidationResult }) {
@@ -413,6 +414,7 @@ function VerifyTab({ result }: { result: ValidationResult }) {
     adjust: checks.filter(c => c.status === "不通过").length,
     missing: checks.filter(c => c.status === "缺失").length,
     skip: checks.filter(c => c.status === "未触发").length,
+    blocked: checks.filter(c => c.status === "blocked").length,
   };
 
   return (
@@ -442,6 +444,7 @@ function VerifyTab({ result }: { result: ValidationResult }) {
           { key: "adjust",  label: "不通过", color: "#d97706", bg: "#fff7ed" },
           { key: "missing", label: "缺失",   color: "#b45309", bg: "#fff7ed" },
           { key: "skip",    label: "未触发", color: "#64748b", bg: "#f8fafc" },
+          { key: "blocked", label: "口径待定", color: "#7c3aed", bg: "#f5f3ff" },
         ] as const).map(s => (
           <div key={s.key} style={{ padding: "10px 18px", borderRadius: 10, background: s.bg, display: "flex", gap: 8, alignItems: "center" }}>
             <span style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{counts[s.key]}</span>

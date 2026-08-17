@@ -24,7 +24,9 @@ import { getVal } from "../field/odiGuideLogic";
 import { allFieldDefs } from "../field/odiFieldCatalog";
 
 export type ValidationDomain = "商务委" | "发改委" | "跨业务";
-export type ValidationStatus = "通过" | "不通过" | "缺失" | "未触发";
+/** 五态(对齐正式版):通过/不通过/缺失 计入汇总;未触发=条件不满足;
+ *  blocked=业务口径待确认(正式版 A-033/C-010/X-019),本轮不执行。后两者不计入三态。 */
+export type ValidationStatus = "通过" | "不通过" | "缺失" | "未触发" | "blocked";
 
 export interface ValidationCheck {
   id: string;
@@ -48,7 +50,8 @@ export interface DeptSummary {
   failed: number;   // 不通过
   missing: number;  // 缺失
   skipped: number;  // 未触发(条件不满足,不计入三态)
-  total: number;    // 已执行规则数 = passed+failed+missing(不含未触发)
+  blocked: number;  // 业务口径待确认(不计入三态)
+  total: number;    // 已执行规则数 = passed+failed+missing(不含未触发/blocked)
 }
 
 export interface ValidationResult {
@@ -364,7 +367,12 @@ export function validateOdiPool(pool: OdiField[]): ValidationResult {
     const passed = cs.filter(c => c.status === "通过").length;
     const failed = cs.filter(c => c.status === "不通过").length;
     const missing = cs.filter(c => c.status === "缺失").length;
-    return { dept: d, passed, failed, missing, skipped: cs.filter(c => c.status === "未触发").length, total: passed + failed + missing };
+    return {
+      dept: d, passed, failed, missing,
+      skipped: cs.filter(c => c.status === "未触发").length,
+      blocked: cs.filter(c => c.status === "blocked").length,
+      total: passed + failed + missing,
+    };
   });
 
   return { checks, hints, summaries };

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   PROJECT_STATUS_CONFIG,
+  DEMO_CONTRIBUTION_ROWS,
   guessMaterialMeta,
   progressFromStatus,
   statusAfterValidation,
@@ -32,6 +33,7 @@ const CHECK_COLORS: Record<string, { color: string; bg: string; border: string }
   "不通过": { color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
   "缺失":   { color: "#d97706", bg: "#fff7ed", border: "#fed7aa" },
   "未触发": { color: "#64748b", bg: "#f8fafc", border: "#e8edf5" },
+  "blocked": { color: "#7c3aed", bg: "#f5f3ff", border: "#ddd6fe" }, // 口径待定
   "待校验": { color: "#92400e", bg: "#fffbeb", border: "#fde68a" },
 };
 
@@ -170,7 +172,7 @@ function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: 
 
   const deptResults = validation.summaries.map(s => ({
     dept: deptLabel(s.dept),
-    passed: s.passed, failed: s.failed, missing: s.missing, skipped: s.skipped, triggered: true, total: s.total,
+    passed: s.passed, failed: s.failed, missing: s.missing, skipped: s.skipped, blocked: s.blocked, triggered: true, total: s.total,
     checkedAt: project.validatedAt ?? "—",
   }));
 
@@ -248,6 +250,11 @@ function ReviewPage({ project, validation, onStartValidation, onAskAssistant }: 
                 {d.skipped > 0 && (
                   <div style={{ fontSize: 10, color: "#64748b", background: "#f8fafc", border: "1px solid #e8edf5", borderRadius: 4, padding: "0 6px" }}>
                     未触发 {d.skipped} 项（条件不满足，不计入三态）
+                  </div>
+                )}
+                {d.blocked > 0 && (
+                  <div style={{ fontSize: 10, color: "#7c3aed", background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 4, padding: "0 6px" }}>
+                    口径待定 {d.blocked} 项（业务未定义，本轮不执行）
                   </div>
                 )}
               </div>
@@ -690,8 +697,11 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
   const cfg = PROJECT_STATUS_CONFIG[project.status];
 
   // 校验中心/驾驶舱全部吃项目自身字段池的实算结果（原先用模块级写死演示池）
-  // P2:组合引擎 = 商务线 13 条即时校验 + 发改委首批跨材料规则
-  const validation = useMemo(() => validateOdiFull(project.fieldPool ?? []), [project.fieldPool]);
+  // P2:组合引擎 = 商务线 13 条即时校验 + 发改委规则族(含构成行明细/资金覆盖/承诺书请示)
+  const validation = useMemo(
+    () => validateOdiFull(project.fieldPool ?? [], { contributionRows: project.contributionRows }),
+    [project.fieldPool, project.contributionRows],
+  );
 
   // 卸载时清掉识别/校验的演示定时器
   useEffect(() => () => { timersRef.current.forEach(t => window.clearTimeout(t)); }, []);
@@ -715,8 +725,8 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
       uploadedCount: nextCount,
       materialVersion: project.materialVersion + 1,
       status: "待校验",
-      // POC 演示：未接 OCR，首次上传后按场景预设模拟"已解析"（含 3 处典型问题演示三态校验）
-      ...(firstUpload && !project.fieldPool ? { fieldPool: seedAssistFieldPool(true) } : {}),
+      // POC 演示：未接 OCR，首次上传后按场景预设模拟"已解析"（含典型问题演示三态校验）
+      ...(firstUpload && !project.fieldPool ? { fieldPool: seedAssistFieldPool(true), contributionRows: DEMO_CONTRIBUTION_ROWS } : {}),
     });
     later(() => {
       onUpdate(p => ({ materials: p.materials.map(m => (m.recog === "识别中" ? { ...m, recog: "已识别" as const } : m)) }));

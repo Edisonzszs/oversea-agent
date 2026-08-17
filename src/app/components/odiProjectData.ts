@@ -1,6 +1,6 @@
 ﻿import { createGuideProject } from "../odi/data/odiProjects";
 import { applyLinkage, commitField, computeDerived, setMaterialValues } from "../odi/field/odiGuideLogic";
-import type { OdiField } from "../odi/data/types";
+import type { OdiContributionRow, OdiField } from "../odi/data/types";
 
 // ─── Service type ───────────────────────────────────────────────────────────
 export type ServiceType = "assist" | "demo";
@@ -44,6 +44,7 @@ export interface AssistProject {
   validatedVersion?: number;      // 已完成校验时的材料版本；= materialVersion 时禁止重复校验（硬边界③）
   validatedAt?: string;           // 最近校验时间（显示用）
   fieldPool?: OdiField[];         // 已解析字段池（未上传/未解析时缺省，校验引擎输入）
+  contributionRows?: OdiContributionRow[]; // 中方投资额构成明细行（备案表构成表解析，A-034~039 输入）
 }
 
 /** 按文件名推断材料类型/所属范围（POC 演示：未接 OCR，仅按名归类） */
@@ -74,11 +75,17 @@ export function progressFromStatus(status: AssistStatus): ("done" | "current" | 
   }
 }
 
+/** 助办演示构成明细行（项目级，A-034~039 输入；与场景预设自有 800 一致） */
+export const DEMO_CONTRIBUTION_ROWS: OdiContributionRow[] = [
+  { id: "cr1", contributor: "上海XX智能装备集团有限公司", method: "货币", source: "境内自有", amountUsdWan: "800" },
+];
+
 /** 助办演示字段池：POC 未接 OCR，首次上传后按场景预设模拟"已解析"。
  *  injectIssues=true 时注入典型问题（注册资本>总额 / 项目说明缺失 / 境外企业名缺失 /
- *  执照 USCC 末位与备案表不一致）以演示三态校验；false 为干净池（全部通过，对应已完成项目）。
- *  P2:同时注入发改侧材料多来源值（备案表/执照/审计/承诺书/请示），供 NDRC 跨材料规则比对。
- *  池就绪后接线引导逻辑：computeDerived(人民币金额按汇率派生) + applyLinkage(单一中方默认)。 */
+ *  执照 USCC 末位与备案表不一致 / 承诺书缺法律责任表述）以演示三态校验；
+ *  false 为干净池（全部通过，对应已完成项目）。
+ *  P2:同时注入发改侧材料多来源值（备案表/执照/审计/承诺书/请示/资金证明），
+ *  供 NDRC 跨材料规则与资金覆盖组比对。 */
 export function seedAssistFieldPool(injectIssues: boolean): OdiField[] {
   let pool = createGuideProject("助办(模拟已解析)", "新设独资", "快速体验").fieldPool;
   const ENTITY = "上海XX智能装备集团有限公司";
@@ -103,6 +110,19 @@ export function seedAssistFieldPool(injectIssues: boolean): OdiField[] {
     pool = commitField(pool, code, v, "upload");
     pool = setMaterialValues(pool, code, [{ material: "备案表", value: v }, { material: "审计报告", value: v }]);
   }
+  // 资金证明识别值(资金覆盖组 F-006/007/011/014、R-009)
+  pool = commitField(pool, "self_funds_available", "800", "upload");
+  pool = setMaterialValues(pool, "self_funds_available", [{ material: "资金证明", value: "800" }]);
+  pool = commitField(pool, "financing_available", "0", "upload");
+  pool = commitField(pool, "cny_balance", "5760", "upload");
+  pool = commitField(pool, "cny_balance_usd", "800", "upload");
+  // 承诺书/请示正文(问题池:承诺书缺「承担…法律责任」表述 → NDRC-C-009 不通过)
+  const COMMITMENT_CORE = "本公司承诺：所提交的材料真实、合法、有效，复印件与原件一致。本项目投资真实存在，是出于真实商业需求开展的境外投资，不存在虚假投资、洗钱等违法违规行为。";
+  const COMMITMENT_TAIL = injectIssues ? "" : "如违反上述承诺，本公司愿意承担相应法律责任，并接受纳入境外投资违法违规行为记录。";
+  pool = commitField(pool, "commitment_body", `真实性承诺书\n${COMMITMENT_CORE}${COMMITMENT_TAIL}`, "upload");
+  pool = commitField(pool, "petition_body",
+    `关于${PROJECT}项目申请备案的请示\n上海市发展和改革委员会：\n按照《企业境外投资管理办法》（国家发展改革委令第11号）有关规定，现将${PROJECT}项目申请报告和有关附件提交你委。请予以备案。\n附件：境外投资项目备案表及相关材料\n${ENTITY}\n2026年8月17日`,
+    "upload");
   if (injectIssues) {
     pool = commitField(pool, "overseas_registered_capital", "900万美元", "upload"); // 注册资本>总额 → 商务委不通过
     pool = commitField(pool, "project_summary", "", "upload");                       // 项目说明缺失 → 发改委缺失
@@ -167,9 +187,9 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     status: "材料校验中",
     investmentType: "新设",
     uploadedCount: 6,
-    mismatchCount: 2,
+    mismatchCount: 3,
     missingCount: 2,
-    passedCount: 29,
+    passedCount: 41,
     generatedCount: 2,
     updatedAt: "今天 14:32",
     materials: [
@@ -184,6 +204,7 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     validatedVersion: 2,
     validatedAt: "今天 14:32",
     fieldPool: seedAssistFieldPool(true),
+    contributionRows: DEMO_CONTRIBUTION_ROWS,
   },
   {
     serviceType: "assist",
@@ -209,7 +230,7 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     uploadedCount: 6,
     mismatchCount: 0,
     missingCount: 0,
-    passedCount: 33,
+    passedCount: 46,
     generatedCount: 5,
     updatedAt: "2026年7月15日",
     materials: [
@@ -224,6 +245,7 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     validatedVersion: 3,
     validatedAt: "2026年7月15日",
     fieldPool: seedAssistFieldPool(false),
+    contributionRows: DEMO_CONTRIBUTION_ROWS,
   },
   // 模拟任务
   {

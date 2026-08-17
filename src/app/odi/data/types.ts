@@ -36,6 +36,16 @@ export interface OdiField {
 
 export type OdiService = "guide" | "assist";
 export type OdiScene = "新设独资" | "并购" | "增资变更";
+
+/** 中方投资额构成明细行(正式版 filing.contribution_rows 口径,A-034~039) */
+export interface OdiContributionRow {
+  id: string;
+  contributor: string;   // 出资企业(实际出资企业,可重复行)
+  method: string;        // 出资方式(10 枚举,见 CONTRIBUTION_METHODS)
+  source: string;        // 资金来源(4 枚举,见 FUNDING_SOURCES)
+  amountUsdWan: string;  // 金额(万美元,折算后)
+  note?: string;         // 备注:method=其他 或 source=其他 时必填;可含「人民币X万元按Y折算」口径
+}
 export type OdiProjectStatus =
   | "填报中" | "待校验" | "校验中" | "待处理" | "可生成" | "已完成";
 

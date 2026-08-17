@@ -73,11 +73,18 @@ const R5: FieldDef[] = [
   { code: "self_funds_overseas", name: "自有资金_境外", round: 5, dept: "shared", kind: "currency" },
   { code: "bank_loan_overseas", name: "银行贷款_境外", round: 5, dept: "shared", kind: "currency" },
   { code: "other_overseas", name: "其他出资_境外", round: 5, dept: "shared", kind: "currency" },
+  // 发改侧资金证明口径(P2 资金覆盖组 F-006/007/011/014、R-009;由资金来源支持文件识别)
+  { code: "self_funds_available", name: "自有资金可用余额(万美元)", round: 5, dept: "ndrc", kind: "currency", note: "资金证明识别;覆盖判定 actual+0.01≥expected" },
+  { code: "financing_available", name: "银行融资可用(万美元)", round: 5, dept: "ndrc", kind: "currency", note: "资金证明识别;与备案表融资构成精确比对" },
+  { code: "cny_balance", name: "人民币余额(万元)", round: 5, dept: "ndrc", kind: "currency", note: "资金证明识别;R-009 折算核对" },
+  { code: "cny_balance_usd", name: "人民币余额折算美元(万美元)", round: 5, dept: "ndrc", kind: "currency", note: "应等于 人民币余额÷折算汇率(quantize 0.01)" },
 ];
 
 // R6 项目说明
 const R6: FieldDef[] = [
   { code: "project_name", name: "项目名称", round: 6, dept: "ndrc", note: "发改口径:投资主体+目的地+投资内容关键词;备案表/请示/承诺书四处一致(P2 发改侧)" },
+  { code: "commitment_body", name: "真实性承诺书正文", round: 6, dept: "ndrc", note: "M-003 四要件+ C-009 法律责任表述由引擎正则检测" },
+  { code: "petition_body", name: "备案请示正文", round: 6, dept: "ndrc", note: "B-012 五要素(标题/主送/正文依据/申报单位/附件)由引擎检测" },
   { code: "project_summary", name: "项目简况", round: 6, dept: "shared", required: true, note: "伴填可起草;禁编造收益/就业/税收/市场规模/经营业绩/风险事实" },
   { code: "project_significance", name: "项目意义", round: 6, dept: "shared", required: true },
 ];
