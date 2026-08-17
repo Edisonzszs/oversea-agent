@@ -199,7 +199,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
         <div style={{
           background: voice.listening ? "#f4f8fe" : "#fff", borderRadius: 10,
           border: `1px solid ${voice.listening ? "#a9c9f2" : "#dde9f7"}`, boxShadow: "0 2px 8px rgba(26,64,140,0.06)",
-          display: "flex", alignItems: "flex-end", padding: "10px 12px", gap: 8, minHeight: 56,
+          display: "flex", alignItems: voice.listening ? "center" : "flex-end", padding: "10px 12px", gap: 8, minHeight: 56,
           maxWidth: 820, margin: "0 auto", transition: "border-color .15s, background .15s",
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>

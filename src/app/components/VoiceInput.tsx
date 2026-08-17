@@ -162,9 +162,10 @@ function formatElapsed(s: number): string {
 }
 
 // ─── 频谱声纹条(ChatGPT 式:真实音量/频率驱动,细圆角竖条随声音起伏) ───────────
-// rAF 逐帧直接改 transform(不 setState,零重渲染);meterRef 为空时用模拟错峰动画兜底。
-export function SpectrumBars({ meterRef, count = 28, color = C.primary, height = 26 }: {
-  meterRef: React.MutableRefObject<AudioMeter | null>; count?: number; color?: string; height?: number;
+// 固定细条宽 + space-between 铺满整行;rAF 逐帧直改 transform(零重渲染);
+// meterRef 为空(无权限/非安全上下文)时降级为模拟错峰动画。
+export function SpectrumBars({ meterRef, count = 40, color = "#94a3b8", height = 28, barWidth = 3 }: {
+  meterRef: React.MutableRefObject<AudioMeter | null>; count?: number; color?: string; height?: number; barWidth?: number;
 }) {
   const wrapRef = useRef<HTMLSpanElement>(null);
 
@@ -210,37 +211,36 @@ export function SpectrumBars({ meterRef, count = 28, color = C.primary, height =
   }, [meterRef, count]);
 
   return (
-    <span ref={wrapRef} style={{ display: "inline-flex", alignItems: "center", gap: 2.5, height, flex: 1, minWidth: 60, overflow: "hidden" }}>
+    <span ref={wrapRef} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", height, flex: 1, minWidth: 0, overflow: "hidden" }}>
       {Array.from({ length: count }).map((_, i) => (
-        <span key={i} style={{ flex: 1, maxWidth: 4, height: "100%", borderRadius: 2, background: color, transformOrigin: "center", transform: "scaleY(0.15)", willChange: "transform" }} />
+        <span key={i} style={{ width: barWidth, height: "100%", borderRadius: 2, background: color, flexShrink: 0, transformOrigin: "center", transform: "scaleY(0.15)", willChange: "transform" }} />
       ))}
     </span>
   );
 }
 
-// ─── 听写条(听写态占据输入框内部,替代 textarea 的视觉;ChatGPT/Codex 式) ──────
+// ─── 听写条(听写态占据输入框内部:灰色频谱铺满整行、上下居中;计时叠加右端淡出) ──
 export function RecordingBar({ elapsed, sessionText = "", interim, meterRef, compact = false }: {
   elapsed: number; sessionText?: string; interim?: string; meterRef: React.MutableRefObject<AudioMeter | null>; compact?: boolean;
 }) {
   const hasText = !!(sessionText || interim);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 1 : 3, minWidth: 0, flex: 1 }}>
-      <style>{`@keyframes recDot{0%,100%{opacity:1}50%{opacity:.25}}@media (prefers-reduced-motion: reduce){.rd{animation:none !important}}`}</style>
-      <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 10, minHeight: compact ? 20 : 36 }}>
-        <span className="rd" style={{ width: compact ? 7 : 9, height: compact ? 7 : 9, borderRadius: "50%", background: C.primary, flexShrink: 0, animation: "recDot 1.1s ease-in-out infinite" }} />
-        <SpectrumBars meterRef={meterRef} count={compact ? 20 : 28} height={compact ? 16 : 26} />
-        <span style={{ fontSize: 12, color: C.primary, fontWeight: 700, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", letterSpacing: 0.5 }}>{formatElapsed(elapsed)}</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 1 : 3, minWidth: 0, flex: 1, justifyContent: "center" }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", minHeight: compact ? 20 : 36 }}>
+        <SpectrumBars meterRef={meterRef} count={compact ? 24 : 40} height={compact ? 16 : 28} barWidth={compact ? 2.5 : 3} />
+        <span style={{
+          position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+          fontSize: 12, color: "#64748b", fontWeight: 700, fontVariantNumeric: "tabular-nums",
+          letterSpacing: 0.5, padding: "0 2px", whiteSpace: "nowrap",
+          background: "linear-gradient(90deg, rgba(244,248,254,0) 0%, #f4f8fe 30%)",
+        }}>{formatElapsed(elapsed)}</span>
       </div>
-      <div style={{ fontSize: compact ? 11.5 : 12.5, lineHeight: 1.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {hasText ? (
-          <>
-            <span style={{ color: C.ink, fontWeight: 600 }}>{sessionText}</span>
-            {interim && <span style={{ color: C.muted, fontStyle: "italic" }}>{sessionText ? " " : ""}{interim}…</span>}
-          </>
-        ) : (
-          <span style={{ color: C.muted }}>{compact ? "正在聆听…说出您的问题" : "正在聆听，识别内容会实时显示在这里（✓ 完成听写，✗ 取消）"}</span>
-        )}
-      </div>
+      {hasText && (
+        <div style={{ fontSize: compact ? 11.5 : 12.5, lineHeight: 1.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <span style={{ color: C.ink, fontWeight: 600 }}>{sessionText}</span>
+          {interim && <span style={{ color: C.muted, fontStyle: "italic" }}>{sessionText ? " " : ""}{interim}…</span>}
+        </div>
+      )}
     </div>
   );
 }
