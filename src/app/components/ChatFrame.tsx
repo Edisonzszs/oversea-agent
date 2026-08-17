@@ -197,14 +197,14 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
       {/* 底部输入（对齐 ChatGPT：录音态整个输入框切换为录音条；生成中发送钮变停止钮） */}
       <div style={{ flexShrink: 0, padding: "12px 0 0" }}>
         <div style={{
-          background: voice.listening ? "#fffafa" : "#fff", borderRadius: 10,
-          border: `1px solid ${voice.listening ? "#e8a7a7" : "#dde9f7"}`, boxShadow: "0 2px 8px rgba(26,64,140,0.06)",
+          background: voice.listening ? "#f4f8fe" : "#fff", borderRadius: 10,
+          border: `1px solid ${voice.listening ? "#a9c9f2" : "#dde9f7"}`, boxShadow: "0 2px 8px rgba(26,64,140,0.06)",
           display: "flex", alignItems: "flex-end", padding: "10px 12px", gap: 8, minHeight: 56,
           maxWidth: 820, margin: "0 auto", transition: "border-color .15s, background .15s",
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {voice.listening ? (
-              <RecordingBar elapsed={voice.elapsed} sessionText={voice.sessionText} interim={interim} />
+              <RecordingBar elapsed={voice.elapsed} sessionText={voice.sessionText} interim={interim} meterRef={voice.meterRef} />
             ) : (
               <>
                 <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}

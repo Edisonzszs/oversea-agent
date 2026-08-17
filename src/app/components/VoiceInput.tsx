@@ -1,18 +1,21 @@
 // 语音听写 + 发送按钮组件 —— 使用浏览器 Web Speech API，支持中文识别。
-// 视觉对齐 Codex / ChatGPT 听写形态：
+// 视觉对齐 ChatGPT / Codex / Claude 听写形态：
 //   MicGlyph          —— 实心胶囊麦克风图标(待录音)
 //   MicButton         —— 开始听写按钮
-//   TravelingWave     —— 持续横向移动的声纹(正弦波无缝滚动)
-//   RecordingBar      —— 听写态占据输入框内部:红点 + 移动声纹 + 计时 + 实时识别文本
+//   SpectrumBars      —— 频谱声纹条:getUserMedia+AnalyserNode 取真实音量/频率驱动,
+//                        说话条随声音起伏、静默落矮;拿不到频谱时降级为模拟错峰动画
+//   RecordingBar      —— 听写态占据输入框内部:蓝点 + 频谱条 + 计时 + 实时识别文本
 //   DictationControls —— 听写中替换 麦克风+发送:✗ 取消听写 / ✓ 完成听写
 //   SendButton        —— 向上箭头三态(禁用灰/可发送蓝/loading spinner);
 //                        传 onStop 且 loading 时变「停止生成」方块钮(可中断流式输出)
+// 听写态配色 = 平台蓝 #1a5bc6(听写是输入行为,与 ChatGPT 同款逻辑)。
 // useVoiceInput 采用会话缓冲:识别文本先积累在 sessionText,✓(confirm)才写入输入框,
 // ✗(cancel)全部丢弃;interim 为实时中间识别文本。
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import gsap from "gsap";
 import { DUR, EASE } from "../motion/tokens";
+import { C } from "../compliance/complianceTheme";
 
 // Web Speech API 类型声明
 interface SpeechRecognitionType {
@@ -31,16 +34,43 @@ function getSpeechRecognition(): (new () => SpeechRecognitionType) | null {
   return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
 }
 
+// ─── 音频频谱计(与语音识别并行取真实音量;Web Speech 不给音量,单独开一路) ─────
+export type AudioMeter = { ctx: AudioContext; stream: MediaStream; analyser: AnalyserNode; data: Uint8Array };
+
+async function openAudioMeter(): Promise<AudioMeter | null> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+    const ctx = new AC();
+    if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
+    const src = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.7;
+    src.connect(analyser);
+    return { ctx, stream, analyser, data: new Uint8Array(analyser.frequencyBinCount) };
+  } catch {
+    return null; // 无权限/非安全上下文(http)等 → UI 降级为模拟动画
+  }
+}
+
+function closeAudioMeter(m: AudioMeter | null) {
+  if (!m) return;
+  try { m.stream.getTracks().forEach(t => t.stop()); } catch {}
+  try { m.ctx.close(); } catch {}
+}
+
 // onCommit:点 ✓ 后把本次听写的落定文本一次性交回调用方写入输入框
 export function useVoiceInput(onCommit: (text: string) => void, onInterim?: (text: string) => void) {
   const [listening, setListening] = useState(false);
   // supported 用惰性初始化(渲染期一次性探测,SSR 安全):同组件多次渲染不重复 setState
   const [supported, setSupported] = useState(() => getSpeechRecognition() != null);
-  const [elapsed, setElapsed] = useState(0);        // 听写时长(秒),驱动录音条计时
+  const [elapsed, setElapsed] = useState(0);          // 听写时长(秒),驱动听写条计时
   const [sessionText, setSessionText] = useState(""); // 本次听写已落定文本(✓ 才提交)
   const recogRef = useRef<SpeechRecognitionType | null>(null);
   const wantListenRef = useRef(false); // 用户意图仍在听写(onend 自动重启用)
   const sessionRef = useRef("");
+  const meterRef = useRef<AudioMeter | null>(null); // 真实频谱(SpectrumBars 逐帧读取)
   const onCommitRef = useRef(onCommit);
   const onInterimRef = useRef(onInterim);
   onCommitRef.current = onCommit;
@@ -90,6 +120,8 @@ export function useVoiceInput(onCommit: (text: string) => void, onInterim?: (tex
     try { recogRef.current?.stop(); } catch {}
     setListening(false);
     onInterimRef.current?.("");
+    closeAudioMeter(meterRef.current);
+    meterRef.current = null;
   }, []);
 
   const clearSession = useCallback(() => { sessionRef.current = ""; setSessionText(""); }, []);
@@ -99,6 +131,7 @@ export function useVoiceInput(onCommit: (text: string) => void, onInterim?: (tex
     clearSession();
     wantListenRef.current = true;
     try { recogRef.current.start(); setListening(true); } catch {}
+    void openAudioMeter().then(m => { meterRef.current = m; }); // 异步开频谱,失败自动降级
   }, [clearSession]);
 
   // ✓ 完成听写:停止并把会话文本写入输入框
@@ -121,56 +154,91 @@ export function useVoiceInput(onCommit: (text: string) => void, onInterim?: (tex
     else start();
   }, [listening, confirm, start]);
 
-  return { listening, supported, elapsed, sessionText, toggle, confirm, cancel };
+  return { listening, supported, elapsed, sessionText, meterRef, toggle, confirm, cancel };
 }
 
 function formatElapsed(s: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// ─── 持续移动的声纹(Codex 式:横向往一个方向无缝滚动的正弦波) ────────────────
-function TravelingWave({ height = 26, color = "#dc2626" }: { height?: number; color?: string }) {
-  const W = 800;              // 总宽 = 整数个周期,平移 -50%(400px)无缝循环
-  const HALF = 20;            // 半周期宽
-  const base = height / 2;
-  const amp = height * 0.6;   // 二次曲线控制点高度(视觉峰约其一半)
-  let d = `M0 ${base} q ${HALF} ${-amp} ${HALF * 2} 0`;
-  for (let x = HALF * 2; x < W; x += HALF * 2) d += ` t ${HALF * 2} 0`;
+// ─── 频谱声纹条(ChatGPT 式:真实音量/频率驱动,细圆角竖条随声音起伏) ───────────
+// rAF 逐帧直接改 transform(不 setState,零重渲染);meterRef 为空时用模拟错峰动画兜底。
+export function SpectrumBars({ meterRef, count = 28, color = C.primary, height = 26 }: {
+  meterRef: React.MutableRefObject<AudioMeter | null>; count?: number; color?: string; height?: number;
+}) {
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return; // 静态低条
+    let raf = 0;
+    const bars = Array.from(wrapRef.current?.children ?? []) as HTMLElement[];
+    const levels = new Array(count).fill(0.15);
+    const t0 = performance.now();
+    const loop = () => {
+      const m = meterRef.current;
+      if (m) {
+        // 真实频谱:取语音能量集中段(约 0~9kHz),均分 count 组,组内取峰值
+        m.analyser.getByteFrequencyData(m.data as any);
+        const bins = m.data;
+        const usable = Math.max(count, Math.floor(bins.length * 0.4));
+        for (let i = 0; i < count; i++) {
+          const from = Math.floor(i * usable / count);
+          const to = Math.max(from + 1, Math.floor((i + 1) * usable / count));
+          let peak = 0;
+          for (let j = from; j < to && j < bins.length; j++) if (bins[j] > peak) peak = bins[j];
+          const target = Math.min(1, (peak / 255) * 1.35); // 增益,说话更醒目
+          levels[i] += (target - levels[i]) * 0.35;
+        }
+      } else {
+        // 降级模拟:错峰正弦,安静地小幅度起伏
+        const t = (performance.now() - t0) / 1000;
+        for (let i = 0; i < count; i++) {
+          const v = 0.2 + 0.3 * (Math.sin(t * (2.1 + (i % 5) * 0.35) + i * 0.9) * 0.5 + 0.5);
+          levels[i] += (v - levels[i]) * 0.25;
+        }
+      }
+      for (let i = 0; i < count; i++) {
+        const bar = bars[i];
+        if (!bar) continue;
+        bar.style.transform = `scaleY(${0.12 + levels[i] * 0.88})`;
+        bar.style.opacity = String(0.45 + levels[i] * 0.55);
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [meterRef, count]);
+
   return (
-    <div style={{ flex: 1, minWidth: 30, height, overflow: "hidden" }}>
-      <style>{`@keyframes waveScroll{to{transform:translateX(-400px)}}`}</style>
-      <svg className="tw" width={W} height={height} viewBox={`0 0 ${W} ${height}`}
-        style={{ display: "block", animation: "waveScroll 2.4s linear infinite" }}>
-        <path d={d} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" />
-      </svg>
-    </div>
+    <span ref={wrapRef} style={{ display: "inline-flex", alignItems: "center", gap: 2.5, height, flex: 1, minWidth: 60, overflow: "hidden" }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <span key={i} style={{ flex: 1, maxWidth: 4, height: "100%", borderRadius: 2, background: color, transformOrigin: "center", transform: "scaleY(0.15)", willChange: "transform" }} />
+      ))}
+    </span>
   );
 }
 
-// ─── 听写条(听写态占据输入框内部,替代 textarea 的视觉;Codex 式) ─────────────
-export function RecordingBar({ elapsed, sessionText = "", interim, compact = false }: {
-  elapsed: number; sessionText?: string; interim?: string; compact?: boolean;
+// ─── 听写条(听写态占据输入框内部,替代 textarea 的视觉;ChatGPT/Codex 式) ──────
+export function RecordingBar({ elapsed, sessionText = "", interim, meterRef, compact = false }: {
+  elapsed: number; sessionText?: string; interim?: string; meterRef: React.MutableRefObject<AudioMeter | null>; compact?: boolean;
 }) {
   const hasText = !!(sessionText || interim);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 1 : 3, minWidth: 0, flex: 1 }}>
-      <style>{`
-        @keyframes recDot{0%,100%{opacity:1}50%{opacity:.25}}
-        @media (prefers-reduced-motion: reduce){.rd{animation:none !important}.tw{animation:none !important}}
-      `}</style>
+      <style>{`@keyframes recDot{0%,100%{opacity:1}50%{opacity:.25}}@media (prefers-reduced-motion: reduce){.rd{animation:none !important}}`}</style>
       <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 10, minHeight: compact ? 20 : 36 }}>
-        <span className="rd" style={{ width: compact ? 7 : 9, height: compact ? 7 : 9, borderRadius: "50%", background: "#dc2626", flexShrink: 0, animation: "recDot 1.1s ease-in-out infinite" }} />
-        <TravelingWave height={compact ? 16 : 26} />
-        <span style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", letterSpacing: 0.5 }}>{formatElapsed(elapsed)}</span>
+        <span className="rd" style={{ width: compact ? 7 : 9, height: compact ? 7 : 9, borderRadius: "50%", background: C.primary, flexShrink: 0, animation: "recDot 1.1s ease-in-out infinite" }} />
+        <SpectrumBars meterRef={meterRef} count={compact ? 20 : 28} height={compact ? 16 : 26} />
+        <span style={{ fontSize: 12, color: C.primary, fontWeight: 700, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", letterSpacing: 0.5 }}>{formatElapsed(elapsed)}</span>
       </div>
       <div style={{ fontSize: compact ? 11.5 : 12.5, lineHeight: 1.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {hasText ? (
           <>
-            <span style={{ color: "#b91c1c", fontWeight: 600 }}>{sessionText}</span>
-            {interim && <span style={{ color: "#dc2626", fontStyle: "italic" }}>{sessionText ? " " : ""}{interim}…</span>}
+            <span style={{ color: C.ink, fontWeight: 600 }}>{sessionText}</span>
+            {interim && <span style={{ color: C.muted, fontStyle: "italic" }}>{sessionText ? " " : ""}{interim}…</span>}
           </>
         ) : (
-          <span style={{ color: "#94a3b8" }}>{compact ? "正在聆听…说出您的问题" : "正在聆听，识别内容会实时显示在这里（✓ 完成听写，✗ 取消）"}</span>
+          <span style={{ color: C.muted }}>{compact ? "正在聆听…说出您的问题" : "正在聆听，识别内容会实时显示在这里（✓ 完成听写，✗ 取消）"}</span>
         )}
       </div>
     </div>
@@ -190,7 +258,7 @@ function MicGlyph({ size, color }: { size: number; color: string }) {
 
 // ─── 麦克风按钮(md=34px 首页 / sm=22px 伴填,热区已保证) ──────────────────────
 // supported=false 时仍渲染按钮(探测可能因双模块实例/环境差异失灵),点击时提示不支持。
-// 听写中的停止/取消/确认由 DictationControls 负责,本按钮只在待录音时渲染。
+// 听写中的停止/取消/确认由 DictationControls 负责,本按钮只在待听写时渲染。
 export function MicButton({ supported, onClick, size = "md" as "md" | "sm" }: {
   supported: boolean; onClick: () => void; size?: "md" | "sm";
 }) {
@@ -225,7 +293,7 @@ export function DictationControls({ onConfirm, onCancel, size = "md" as "md" | "
   };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: size === "sm" ? 6 : 8, flexShrink: 0 }}>
-      {/* ✗ 取消听写:丢弃全部识别文本 */}
+      {/* ✗ 取消听写:丢弃全部识别文本(取消=破坏性操作,保留红色语义) */}
       <button onClick={onCancel} title="取消听写" aria-label="取消听写"
         style={{
           width: box, height: box, borderRadius: "50%", border: "1px solid #e8b4b4", background: "#fff",
@@ -240,7 +308,7 @@ export function DictationControls({ onConfirm, onCancel, size = "md" as "md" | "
       {/* ✓ 完成听写:识别文本写入输入框 */}
       <button onClick={onConfirm} title="完成听写" aria-label="完成听写"
         style={{
-          width: box, height: box, borderRadius: "50%", border: "none", background: "#1a5bc6",
+          width: box, height: box, borderRadius: "50%", border: "none", background: C.primary,
           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           boxShadow: "0 2px 8px rgba(26,91,198,0.35)", transition: "background .15s",
         }}

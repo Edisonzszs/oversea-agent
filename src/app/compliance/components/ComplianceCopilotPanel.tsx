@@ -164,9 +164,9 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
 
       {/* 输入区（对齐 ChatGPT：录音态整个输入框切换为录音条）*/}
       <div style={{ borderTop: `1px solid ${C.lineSoft}`, padding: "8px 10px 10px", flexShrink: 0, background: "#fff" }}>
-        <div style={{ border: `1px solid ${voice.listening ? "#e8a7a7" : (input.trim() || interim ? C.primaryBorder : C.line)}`, borderRadius: 12, background: voice.listening ? "#fffafa" : C.field, padding: "6px 6px 5px 10px", transition: "border-color .15s, background .15s" }}>
+        <div style={{ border: `1px solid ${voice.listening ? "#a9c9f2" : (input.trim() || interim ? C.primaryBorder : C.line)}`, borderRadius: 12, background: voice.listening ? "#f4f8fe" : C.field, padding: "6px 6px 5px 10px", transition: "border-color .15s, background .15s" }}>
           {voice.listening ? (
-            <RecordingBar elapsed={voice.elapsed} sessionText={voice.sessionText} interim={interim} compact />
+            <RecordingBar elapsed={voice.elapsed} sessionText={voice.sessionText} interim={interim} meterRef={voice.meterRef} compact />
           ) : (
             <>
               <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKeyDown} placeholder="描述投资安排，或问字段含义/该填什么/法规…" rows={1}
@@ -177,7 +177,7 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 0 }}>
             <span style={{ fontSize: 11.5, color: C.sub, paddingLeft: 2, display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
               {!voice.listening && <MicButton size="sm" supported={voice.supported} onClick={voice.toggle} />}
-              {voice.listening ? <span style={{ fontSize: 11.5, color: "#dc2626", fontWeight: 600 }}>正在聆听…</span> : "Enter 发送 · Shift+Enter 换行"}
+              {voice.listening ? <span style={{ fontSize: 11.5, color: C.primary, fontWeight: 600 }}>正在聆听…</span> : "Enter 发送 · Shift+Enter 换行"}
             </span>
             {voice.listening
               ? <DictationControls size="sm" onConfirm={voice.confirm} onCancel={voice.cancel} />
