@@ -26,7 +26,7 @@ export function StepProfile({ api }: { api: WizardApi }) {
       </p>
 
       <FormRow label="企业名称/信用代码">
-        <TextInput value={s.answers.single["p_name"] ?? ""} onChange={v => api.setSingle("p_name", v)} placeholder="（演示可不填）" />
+        <TextInput value={s.answers.single["p_name"] ?? ""} onChange={v => api.setSingle("p_name", v)} placeholder="（选填）" />
       </FormRow>
 
       <FormRow label="所有制类型" hint="国有企业另触发国资监管提示（中央企业适用国资委 35 号令）">
@@ -43,7 +43,7 @@ export function StepProfile({ api }: { api: WizardApi }) {
         </SelectInput>
       </FormRow>
 
-      <FormRow label="最终目的地" hint="选定后须阅读该国《对外投资提示事项》；选定 22 个需核准国别（朝鲜、伊拉克、南苏丹等）将触发从严预警与模块三 3.3">
+      <FormRow label="最终目的地" hint="选定后弹出该国《对外投资提示事项》须确认已读；选定 22 个需核准国别（不丹、朝鲜、南苏丹等，填表说明第 15 条）将自动触发从严预警与模块三 3.3">
         <SelectInput value={s.answers.single["p_ctry"] ?? ""} onChange={v => api.pickCountry(v)}>
           <option value="">请选择国别（地区）</option>
           {COUNTRY_OPTIONS.map(o => <option key={o}>{o}</option>)}
@@ -54,7 +54,7 @@ export function StepProfile({ api }: { api: WizardApi }) {
         <TextInput value={s.answers.single["p_amt"] ?? ""} onChange={v => api.setSingle("p_amt", v)} placeholder="如：5,000 万美元（金额一律折美元填报）" />
       </FormRow>
 
-      <FormRow label="投资路径" hint="目的地为港澳台或经港澳台中转的，均参照适用（837 号令第三十二条）">
+      <FormRow label="投资路径" hint="目的地选港澳台即为投向港澳台；目的地为港澳台或经港澳台中转的，均参照适用（837 号令第三十二条）">
         <SelectInput value={s.answers.single["p_path"] ?? ""} onChange={v => api.setSingle("p_path", v)}>
           <option value="">请选择</option>
           <option value="direct">直接投资至目的地</option>
@@ -144,7 +144,7 @@ export function StepInvestMode({ api }: { api: WizardApi }) {
       {mode === "ma" && (
         <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
           <h2 style={h3Title}>分支 B　并购类：交易结构、标的真实性与定价公允性</h2>
-          <div style={noteStyle}><b>前置程序提示（商务部系统实测）：</b>并购/增资并购须先填报"并购事项前期报告表"方可填写申请表，请纳入交易时间表。</div>
+          <div style={noteStyle}><b>前置程序提示（商务部系统规则）：</b>设立方式为"并购"或"增资并购"的，必须先选择已填写或已通过的"并购事项前期报告表"（在系统"备案（核准）报告"应用中填报），方可继续填写境外投资申请表。请将前期报告纳入交易时间表。</div>
           <QuestionBlock stem="B-1　本次交易完成后，属于以下哪种类型？">
             <RadioQ name="m0a" value={val(s, "m0a")} options={M0A_OPTS} onChange={v => api.setSingle("m0a", v)} />
           </QuestionBlock>
@@ -242,23 +242,24 @@ export function StepTarget({ api }: { api: WizardApi }) {
   const mod3Fids = fileSet(mode).filter(f => FILE_MOD[f] === "模块三");
   return (
     <>
+      <div style={noteStyle}><b>审批填报预告（商务部系统官方填表说明）：</b>申请表中“投资路径”仅指第一层级境外企业（作为投资平台、不从事具体经营业务，可通过“+”增加多家）；“最终目的地境外企业”另行单独填报，注册资本应与其章程约定一致。请按“第一层级平台+最终目的地企业”两层口径梳理架构信息。</div>
       {mode === "ma" && (
-        <QuestionBlock stem="3.1-②　标的登记文件（注册证明 · 股东名册 · 董事名册）是否齐备并备妥中文翻译件？">
-          <RadioQ name="t2" value={val(s, "t2")} options={YN_OPTS} onChange={v => api.setSingle("t2", v)} />
+        <QuestionBlock stem="3.1-②　标的注册证明文件、股东名册、董事名册是否已取得？是否已备加盖公章的中文翻译件？" law="登记文件形式要件为审查环节统一要求（外文文件须附加盖公章的中文翻译件）；缺登记文件判档不得高于 C。">
+          <RadioQ name="t2" value={val(s, "t2")} options={T2_OPTS} onChange={v => api.setSingle("t2", v)} />
         </QuestionBlock>
       )}
       {checkedVals(s, "p_arch").includes("vie") && (
-        <QuestionBlock stem="3.1-③　37 号文外汇登记（VIE/返程投资）是否已办理？">
-          <RadioQ name="t3" value={val(s, "t3")} options={YN_OPTS} onChange={v => api.setSingle("t3", v)} />
+        <QuestionBlock stem="3.1-③　（涉 VIE 或返程投资适用）境内创始人/股东是否已办理 37 号文外汇登记？" law="《国家外汇管理局关于境内居民通过特殊目的公司境外投融资及返程投资外汇管理有关问题的通知》（汇发〔2014〕37 号）。未登记的先补办登记再申报。">
+          <RadioQ name="t3" value={val(s, "t3")} options={T3_OPTS} onChange={v => api.setSingle("t3", v)} />
         </QuestionBlock>
       )}
 
-      <QuestionBlock stem="3.2　三套负面清单逐项核对（法律渊源不同，分别核对，不可混淆）" law="清单 A：敏感行业目录（不分金额一律核准）；清单 B：74 号文限制类（须经核准）；清单 C：74 号文禁止类（不予批准/备案）。均不涉及请勾选下方“均不涉及”。">
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, margin: "8px 0 4px" }}>清单 A　敏感行业目录</div>
+      <QuestionBlock stem="3.2　三套负面清单逐项核对（法律渊源不同，分别核对，不可混淆）" law="清单 A：敏感行业目录（2018）；清单 B：74 号文限制类；清单 C：74 号文禁止类。">
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, margin: "8px 0 4px" }}>清单 A　敏感行业目录（2018）——本项目是否涉及（涉及后果：不分金额一律核准）</div>
         <CheckQ values={checkedVals(s, "lsA")} options={LSA_OPTS} onToggle={v => api.toggleMulti("lsA", v)} />
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, margin: "12px 0 4px" }}>清单 B　74 号文限制类</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, margin: "12px 0 4px" }}>清单 B　74 号文限制类——本项目是否涉及（涉及后果：须经核准）</div>
         <CheckQ values={checkedVals(s, "lsB")} options={LSB_OPTS} onToggle={v => api.toggleMulti("lsB", v)} />
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, margin: "12px 0 4px" }}>清单 C　74 号文禁止类</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, margin: "12px 0 4px" }}>清单 C　74 号文禁止类——本项目是否涉及（涉及后果：不予批准/备案，自查判 D）</div>
         <CheckQ values={checkedVals(s, "lsC")} options={LSC_OPTS} onToggle={v => api.toggleMulti("lsC", v)} />
         <label style={{ display: "inline-block", marginTop: 10, fontSize: 13, cursor: "pointer", color: s.lsNone ? C.primary : C.sub, background: s.lsNone ? C.primaryBg : C.fieldBg, border: `1px solid ${s.lsNone ? C.primary : C.line}`, borderRadius: 7, padding: "6px 12px" }}>
           <input type="checkbox" checked={s.lsNone} onChange={e => api.setLsNone(e.target.checked)} style={{ marginRight: 6 }} />三套清单均不涉及
@@ -266,7 +267,7 @@ export function StepTarget({ api }: { api: WizardApi }) {
       </QuestionBlock>
 
       {isRiskCtry(val(s, "p_ctry")) && (
-        <QuestionBlock stem="3.3-①　该国别属“需核准国别”，风险防控能力证明材料是否已备妥？" law="填表说明第 15 条 / 74 号文限制类“敏感国家（地区）投资”，须经核准。">
+        <QuestionBlock stem="3.3-①　该国别属需核准国别，上述风险防控能力证明材料是否已备妥？" law="该国别属从严核准范围。企业可提供境外风险识别与防控能力证明材料（风险评估报告、应急预案、当地合规资源安排等）供审查判断；是否核准由主管机关按从严原则裁量。官方口径参考：商务部系统填表说明列明“需要核准的国别/地区”共 22 个（不丹、斯威士兰、梵蒂冈、帕劳、马绍尔群岛、图瓦卢、海地、危地马拉、巴拉圭、伯利兹、圣基茨和尼维斯、圣卢西亚、圣文森特和格林纳丁斯、也门、朝鲜、利比亚、苏丹、索马里、刚果（金）、伊拉克、中非共和国、南苏丹；名单以商务部系统最新公布为准）。">
           <RadioQ name="t4" value={val(s, "t4")} options={T4_OPTS} onChange={v => api.setSingle("t4", v)} />
         </QuestionBlock>
       )}
@@ -282,15 +283,16 @@ export function StepSecurity({ api }: { api: WizardApi }) {
   const s1a = val(s, "s1a");
   return (
     <>
-      <QuestionBlock stem="4-1a　是否存在人员/技术跨境安排（出口管制与技术出境，837 号令第十三条）？">
-        <RadioQ name="s1a" value={s1a} options={[{ v: "n", label: "不存在人员/技术跨境安排" }, { v: "y", label: "存在人员/技术跨境安排" }]} onChange={v => api.setSingle("s1a", v)} />
+      <p style={noteStyle}>安全审查是受理后的前置环节：主管机关受理申请后先进行安全审查，疑虑未消除的不予批准、不进入后续实质审查。本模块为事实采集与预警，不能替代主管机关安全审查。商务部备案系统在审批端同样设置四道敏感问答（一国以上利益/三项清单/石墨物项/稀土物项），本模块问答口径与商务部系统一致。</p>
+      <QuestionBlock stem="4-1a　本次投资或后续运营中，是否存在人员/技术跨境安排（跨境派遣技术人员、组织人员赴境外工作、跨境提供技术指导、安排人员跨境培训，或向境外提供技术图纸、工艺流程、软件源代码、数据集等）？" law="837 号令第十三条；第十五条（境外投资安全审查制度）；《出口管制法》《两用物项出口管制条例》；《中国禁止出口限制出口技术目录》。涉禁止出口内容为“一条红线”，不得实施；涉限制出口内容须先取得许可。">
+        <RadioQ name="s1a" value={s1a} options={[{ v: "n", label: "均无" }, { v: "y", label: "有上述一项或多项安排" }]} onChange={v => api.setSingle("s1a", v)} />
       </QuestionBlock>
       {s1a === "y" && (
         <>
-          <QuestionBlock stem="4-1b　所涉领域（可多选）：" >
+          <QuestionBlock stem="4-1b　（有安排时）所涉内容领域（可多选，对照《中国禁止出口限制出口技术目录》）：">
             <CheckQ values={checkedVals(s, "s1b")} options={S1B_OPTS} noneValue="0" onToggle={v => api.toggleMulti("s1b", v)} />
           </QuestionBlock>
-          <QuestionBlock stem="4-1c　是否已对照《中国禁止出口限制出口技术目录》及三项清单核对？">
+          <QuestionBlock stem="4-1c　是否已对照上述目录及“三项清单”（两用物项管制清单、禁止限制出口技术目录、核出口管制清单）完成核对？（商务部备案系统内嵌约 2000 条管制商品库，可按商品名称/编码检索查证）" law="《中国禁止出口限制出口技术目录》（2025 年第 28 号公告调整版）。">
             <RadioQ name="s1c" value={val(s, "s1c")} options={S1C_OPTS} onChange={v => api.setSingle("s1c", v)} />
           </QuestionBlock>
         </>
@@ -321,7 +323,7 @@ export function StepIndustryCountry({ api }: { api: WizardApi }) {
   const s = api.state;
   return (
     <>
-      <p style={noteStyle}>本模块为信息采集项，正式版接入商务部《对外投资合作国别（地区）指南（2025 年版）》、中国信保国家风险评级与外交部领事提醒；当前为演示数据。</p>
+      <p style={noteStyle}>本模块采集行业与国别事实信息并即时输出提示，<b>不判档、不计文件分</b>。审批环节将按行业与国别要求提供更充分的资料论述，请提前准备。（行业与国别要点将持续完善扩充，提示内容以官方最新发布为准）</p>
       <FormRow label="行业细分（采集）">
         <TextInput value={s.answers.single["q51"] ?? ""} onChange={v => api.setSingle("q51", v)} placeholder="如：半导体集成电路制造" />
       </FormRow>
@@ -343,22 +345,25 @@ export function StepIndustryCountry({ api }: { api: WizardApi }) {
   );
 }
 
-// ─── 使用说明（步骤 0）─────────────────────────────────────────────────────────
+// ─── 使用说明（步骤 0，文案对齐 20260813 完整版对外发布稿 12 条）───────────────
 export function StepIntro({ onStart }: { onStart: () => void }) {
   return (
     <div>
-      <h3 style={{ color: C.primary, fontSize: 16, marginBottom: 10 }}>本自查是什么</h3>
-      <p style={{ fontSize: 13.5, color: C.sub, lineHeight: 1.8 }}>
-        企业境外投资（ODI）合规自查是<b style={{ color: C.ink }}>自愿性辅导工具，不是申报条件</b>，任何档位均可依法申报。系统按您填报的客观事实，
-        对照主体资格、投资方式、标的、安全审查、行业国别五大要素，给出<b style={{ color: C.ink }}>自查档位（A–D）</b>与<b style={{ color: C.ink }}>文件齐备度（核心+增强双层）</b>双分制结果，并输出可随申报材料一并提交的自查报告。
-      </p>
-      <ol style={{ margin: "14px 0 14px 22px", fontSize: 13.5, color: C.ink, lineHeight: 2 }}>
-        <li>依次完成 6 个模块的自查；模块二会按您选定的投资方式（新设 / 并购 / 变更）进入对应分支。</li>
-        <li>每题作答决定<b>自查档位</b>；每个"应准备文件"上传与否决定<b>核心齐备度</b>（增强层不提交不扣分）。</li>
-        <li>选定国别后须阅读该国《对外投资提示事项》；22 个需核准国别将触发从严预警。</li>
-        <li>完成后生成自查报告、文件齐备度明细与缺件清单。<b>上传文件仅读取文件名、不上传不留存。</b></li>
+      <h3 style={{ color: C.primary, fontSize: 16, marginBottom: 10 }}>使用说明（企业必读）</h3>
+      <ol style={{ margin: "0 0 14px 22px", fontSize: 13, color: C.ink, lineHeight: 1.9 }}>
+        <li><b>本表定位。</b>本表供拟开展境外投资的企业自愿自查使用，帮助企业在正式申报前系统了解监管要求、对照准备材料、预判自身状态。完成自查并非申报的前置条件，任何档位均可依法申报。</li>
+        <li><b>填写人建议。</b>本表宜由企业主管投资业务的部门人员填写（境外经营团队对投资安排相关章节通常不熟悉）。</li>
+        <li><b>填写方式。</b>企业只需回答客观事实问题（是否、多少、有无），无需自行判断风险档位；各项评价档位由系统根据事实回答自动推导。全部问题附“分析依据”，点击可展开学习。</li>
+        <li><b>双轨输出。</b>本表输出两项结果：<b>自查判断等级（ABCD）</b>——按事实回答推导、就低原则确定，回答“能不能报”；<b>文件齐备度</b>——按“核心+增强”双层制对各题“应准备文件”的上传情况计分（核心层按权重计分、各路径满分 100；增强层不提交不扣分、每提交 1 件加 1 分），回答“材料备到什么程度”。两轨相互独立、互不折算，报告页给出组合解读。</li>
+        <li><b>文件上传与计分规则。</b>①上传自愿、不作申报条件：每件应准备文件旁设上传入口，上传与否不影响判档等级；不上传不得分，上传即按该件权重记分；②一题多件的，凑齐才记满分，缺一件扣一件的分；③完整文件与脱敏文件均可上传（可脱敏范围提示：商业秘密、个人信息、交易对手信息），脱敏文件同权重计分，但在报告中单独列示，并按 80% 口径给出折算参考分；④不适用的条件项记 0 分、分母固定 100，报告中注明本次实际可得上限；⑤申报材料实行“核心+增强”双层制——核心层材料按权重计分、各路径满分 100；增强层材料不提交不扣分、每提交一件加 1 分（新设类、并购类上限 5 分，变更类上限 4 分）。系统仅作形式接收、不核验文件内容真伪，分数仅反映材料齐备程度，不代表合规结论。</li>
+        <li><b>评价档位含义。</b>A＝材料齐备，可直接申报；B＝基本具备，需补充材料；C＝存在需先解决的问题；D＝存在禁止性情形或重大缺陷，不建议申报。总档按“就低原则”确定。</li>
+        <li><b>数据用途告知。</b>企业填报内容仅用于生成本次自查报告，不作为执法线索使用。上传文件仅用于本次自查计分与报告生成；登录用户可保存填报数据、修改后重新生成报告；数据存储位置、访问权限、保密责任与留存期限按平台公布的企业数据安全政策执行，企业可随时删除已上传文件。</li>
+        <li><b>声明。</b>本自查结果不构成法律意见，亦不代表主管机关审批结论，最终以主管机关依法审查为准。涉及重大、复杂或敏感投资安排的，建议咨询专业机构（见报告页“我可以咨询谁”）。</li>
+        <li><b>联盟服务引导。</b>本工具在若干节点嵌入“平台专业服务联盟机构”服务引导，遵循四条铁律：帮扶不推销（只指机构类别、不点名机构）；公共服务先行；名词统一；企业自主——是否使用服务与判档、计分完全脱钩。各专业服务事项按材料类型对应机构类别办理：审计、验资事项由会计师事务所办理；银行资金证明由银行出具；评估、估值事项由评估机构办理；法律调查、尽职调查及涉外法律咨询事项由律师事务所（含境内外律所）办理。</li>
+        <li><b>法源标注。</b>本表所附法律依据中，《国务院关于对外投资的规定》（国务院令第 837 号）相关条文已经全文逐条核验；部门规章条文号沿用既有评审标准定稿口径。</li>
+        <li><b>版本说明。</b>本工具为完整版：建议登录后使用，可保存填报数据、修改后重新生成报告，并获得平台专业服务联盟资源推荐；完整填写约需 40-60 分钟。另有简化版：无需登录，约 10-15 分钟，覆盖核心自查事项，适合快速初步自测。</li>
+        <li><b>术语说明。</b>标注“前置门槛”的事项（自查 1、自查 3、自查 4）若不符合，申报将不被受理，建议优先处理。</li>
       </ol>
-      <div style={noteStyle}><b>双层声明：</b>本报告不构成法律意见，不代表主管机关审批结论，最终以主管机关依法审查为准；文件齐备度分数仅反映材料齐备程度，不代表合规结论。</div>
       <div style={{ textAlign: "right", marginTop: 16 }}>
         <button onClick={onStart} style={{ background: C.primary, color: "#fff", border: "none", borderRadius: 8, padding: "10px 30px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>开始自查</button>
       </div>
@@ -382,10 +387,10 @@ const Z_QUESTIONS = [
     name: "z1", stem: "自查 1　股权架构及实际控制人（前置门槛）", fids: ["f_z1a", "f_z1b"] as FileId[],
     law: "837 号令第二条；《境外投资管理办法》（商务部令 2014 年第 3 号）第九条、第十条；《企业境外投资管理办法》（发改委令第 11 号）。",
     opts: [
-      { v: "a", label: "能绘制上穿至最终实际控制人的完整股权架构图，各层持股均有登记文件证明，最终实际权益比例已计算，且不存在无商业实质安排" },
+      { v: "a", label: "能绘制上穿至最终实际控制人（自然人/国资委/上市公司即止）的完整股权架构图，各层持股均有登记文件证明，最终实际权益比例已计算（各层相乘、多路径相加），且不存在无商业实质安排" },
       { v: "b", label: "能绘制完整架构图，但部分层级登记文件未齐" },
       { v: "c", label: "存在多层嵌套，但能说明商业合理性（真实历史沿革、合规税务筹划等）" },
-      { v: "d", label: "存在纯离岸空转等无商业实质安排，或无法追溯至最终实际控制人" },
+      { v: "d", label: "存在纯离岸空转、拆分小额出境后境外汇聚等无商业实质安排，或无法追溯至最终实际控制人" },
     ],
   },
   {
@@ -412,7 +417,7 @@ const Z_QUESTIONS = [
     name: "z4", stem: "自查 4　违法违规记录（前置门槛）", fids: ["f_z4a", "f_z4b"] as FileId[],
     law: "《对外投资备案（核准）报告暂行办法》（商合发〔2018〕24 号）及联合惩戒机制；837 号令第十条。",
     opts: [
-      { v: "a", label: "本企业及法定代表人、实控人近五年无刑事/重大行政处罚，未列入失信或联合惩戒名单，不处于资格罚限制期" },
+      { v: "a", label: "本企业及法定代表人、实际控制人近五年无刑事处罚或重大行政处罚，未列入失信被执行人或联合惩戒名单，不处于资格罚限制期" },
       { v: "b", label: "曾有一般性行政处罚，但与境外投资无直接关联，可提供说明" },
       { v: "c", label: "曾有与境外投资相关的行政处罚，但影响已消除、有整改证明" },
       { v: "d", label: "存在刑事处罚记录，或在失信/联合惩戒名单，或处于资格罚限制期" },
@@ -449,10 +454,10 @@ const M1_OPTS = [{ v: "a", label: "三类报告齐备且机构资质完备" }, {
 const M2_OPTS = [{ v: "a", label: "有可比区间，定价落在区间内" }, { v: "b", label: "有可比区间，定价偏离但已备充分理由" }, { v: "b2", label: "报告未含可比案例区间" }, { v: "c", label: "定价偏离区间且无依据说明" }];
 const M3_OPTS = [{ v: "a", label: "惯常条款齐备" }, { v: "b", label: "个别条款缺失，正在谈判补充" }, { v: "c", label: "缺失关键内容或存在明显不利异常安排" }];
 const C1_OPTS = [
-  { v: "amt", label: "投资额变化" }, { v: "inv", label: "投资人变化" }, { v: "cap", label: "投资资本构成变化" },
-  { v: "biz", label: "业务范围变化" }, { v: "path", label: "投资路径变化" }, { v: "oth", label: "其他证书载明事项变化" },
+  { v: "amt", label: "投资额变化——增资、减资，或股权购买、出售引起的中方投资额增减" }, { v: "inv", label: "投资人变化——新增境内或境外投资人、减少既有投资人" }, { v: "cap", label: "投资资本构成变化——出资方式、股权/债权结构、币种等调整" },
+  { v: "biz", label: "业务范围（经营范围）变化" }, { v: "path", label: "投资路径变化——中间层架构、持股链条调整" }, { v: "oth", label: "其他证书载明事项变化（投资地点、境外企业名称等）" }, { v: "0", label: "以上均未发生" },
 ];
-const C2_OPTS = [{ v: "a", label: "已在情形发生前申请并获同意" }, { v: "b", label: "尚未申请——务必在情形发生前向原机关申请变更" }];
+const C2_OPTS = [{ v: "a", label: "已在情形发生前申请并获同意" }, { v: "c", label: "未在情形发生前申请或未获同意" }];
 const C3_OPTS = [{ v: "nd", label: "新增境内投资人" }, { v: "nf", label: "新增境外投资人" }, { v: "rd", label: "减少既有投资人" }];
 const C4_OPTS = [{ v: "zg", label: "转股" }, { v: "zjz", label: "增资或减资" }, { v: "tb", label: "转股与增资/减资同时进行" }];
 const C5_OPTS = [{ v: "a", label: "已由持股比例最大的境内企业牵头办理联合申报" }, { v: "b", label: "持股比例已测算，联合申报安排待落实" }, { v: "c", label: "尚未测算各境内投资人持股比例——申报主体无法确定" }];
@@ -461,16 +466,24 @@ const G1_OPTS = [{ v: "a", label: "实控人及关键负责人具备相关行业
 const G2_OPTS = [{ v: "a", label: "不涉及关联方" }, { v: "a2", label: "涉及关联方，定价依据已说明" }, { v: "b", label: "涉及关联方，定价依据说明待准备" }, { v: "d", label: "涉及关联方但拟不披露（D 风险）" }];
 const G3_OPTS = [{ v: "qz", label: "全资" }, { v: "kg", label: "控股" }, { v: "gt", label: "共同控制" }, { v: "cg", label: "参股" }];
 const G4_OPTS = [{ v: "a", label: "各层商业理由能够说明" }, { v: "b", label: "部分层级理由待整理" }];
-const YN_OPTS = [{ v: "a", label: "齐备/已办理" }, { v: "b", label: "部分缺失/尚未办理" }];
-const T4_OPTS = [{ v: "b", label: "风险防控材料已备妥，供审查判断" }, { v: "c", label: "风险防控材料尚未备妥" }];
-const LSA_OPTS = [{ v: "a1", label: "敏感行业目录（武器装备、跨境水资源开发利用等）" }, { v: "a2", label: "新闻传媒（触及不分金额一律核准）" }];
-const LSB_OPTS = [{ v: "b1", label: "房地产" }, { v: "b2", label: "酒店、影城、娱乐业、体育俱乐部" }, { v: "b3", label: "在境外设立无具体实业项目的股权投资基金/投资平台" }];
-const LSC_OPTS = [{ v: "c1", label: "未经国家批准的军事工业或相关技术" }, { v: "c2", label: "运用我国禁止出口的工艺/技术" }, { v: "c3", label: "赌博业、色情业等" }];
+const T2_OPTS = [{ v: "a", label: "三类文件齐备，中文翻译件已备" }, { v: "c", label: "部分缺失或翻译件未备" }];
+const T3_OPTS = [{ v: "a", label: "已办理登记" }, { v: "c", label: "尚未登记" }];
+const T4_OPTS = [{ v: "b", label: "已备妥（风险评估报告+应急预案+当地合规资源安排）" }, { v: "c", label: "尚未备妥" }];
+// 三套负面清单(交付稿口径:清单A 3项/B 7项/C 5项,数字值;与速测版一致以便升级直通)
+const LSA_OPTS = [{ v: "1", label: "武器装备的研制生产维修" }, { v: "2", label: "跨境水资源开发利用" }, { v: "3", label: "新闻传媒" }];
+const LSB_OPTS = [
+  { v: "1", label: "与未建交、发生战乱、受国际条约限制的敏感国家（地区）的投资" }, { v: "2", label: "房地产" }, { v: "3", label: "酒店" },
+  { v: "4", label: "影城" }, { v: "5", label: "娱乐业" }, { v: "6", label: "体育俱乐部" }, { v: "7", label: "在境外设立无具体实业项目的股权投资基金或投资平台" },
+];
+const LSC_OPTS = [
+  { v: "1", label: "未经国家批准的军事工业核心技术和产品输出" }, { v: "2", label: "运用国家禁止出口的技术工艺产品" }, { v: "3", label: "赌博业、色情业" },
+  { v: "4", label: "国际条约禁止的投资" }, { v: "5", label: "其他危害国家利益和安全的投资" },
+];
 const S1B_OPTS = [
-  { v: "li1", label: "锂电池正极材料" }, { v: "li2", label: "锂矿提锂/金属锂制备" }, { v: "re", label: "稀土提炼/永磁体" }, { v: "sc", label: "半导体/集成电路制造" },
-  { v: "ai", label: "人工智能大模型/算法" }, { v: "bd", label: "北斗/卫星导航" }, { v: "bio", label: "基因编辑/生物技术" }, { v: "uav", label: "无人机/反无人机" },
+  { v: "li1", label: "锂电池正极材料（磷酸铁锂/磷酸锰铁锂）" }, { v: "li2", label: "锂矿提锂/金属锂制备" }, { v: "re", label: "稀土提炼加工/永磁体" }, { v: "sc", label: "半导体/集成电路制造" },
+  { v: "ai", label: "人工智能大模型/机器学习算法" }, { v: "bd", label: "北斗/卫星导航技术" }, { v: "bio", label: "基因编辑/生物技术" }, { v: "uav", label: "无人机/反无人机技术" },
   { v: "p3d", label: "3D 打印/增材制造" }, { v: "cnc", label: "高档数控机床" }, { v: "aero", label: "航空航天/燃气轮机" }, { v: "cf", label: "碳纤维/复合材料" },
-  { v: "uhv", label: "特高压输变电" }, { v: "tcm", label: "中药饮片炮制/珍稀药材" },
+  { v: "uhv", label: "特高压输变电" }, { v: "tcm", label: "中药饮片炮制/珍稀药材" }, { v: "0", label: "以上均不涉及" },
 ];
 const S1C_OPTS = [
   { v: "ok", label: "已核对目录及三项清单，不在禁限范围" },
@@ -479,7 +492,7 @@ const S1C_OPTS = [
   { v: "nolic", label: "涉限制出口内容且未申办许可" },
   { v: "ban", label: "涉禁止出口内容（一条红线）" },
 ];
-const S2A_OPTS = [{ v: "b2c", label: "B2C 用户数据" }, { v: "b2b", label: "B2B 客户数据" }, { v: "hr", label: "员工信息跨境" }, { v: "ops", label: "跨境运维" }, { v: "rd", label: "跨境研发数据" }];
+const S2A_OPTS = [{ v: "b2c", label: "B2C 终端用户数据" }, { v: "b2b", label: "B2B 客户数据" }, { v: "hr", label: "跨境员工管理" }, { v: "ops", label: "跨境运维（境外远程访问境内系统）" }, { v: "rd", label: "跨境研发数据共享" }, { v: "0", label: "均不涉及" }];
 const S2C_OPTS = [
   { v: "a", label: "不涉及数据出境" },
   { v: "a2", label: "已完成数据出境安全评估等法定路径" },
@@ -490,7 +503,7 @@ const S2C_OPTS = [
 const S3_OPTS = [
   { v: "ic", label: "集成电路与半导体设备" }, { v: "min", label: "关键矿产与稀土" }, { v: "bat", label: "新能源电池与材料" }, { v: "biomed", label: "生物医药与医疗器械" },
   { v: "eq", label: "高端装备与数控机床" }, { v: "sw", label: "基础软件与工业软件" }, { v: "aero", label: "航空航天与燃气轮机" }, { v: "net", label: "通信与网络设备" },
-  { v: "pw", label: "特高压输变电与能源装备" }, { v: "mat", label: "碳纤维等关键新材料" },
+  { v: "pw", label: "特高压输变电与能源装备" }, { v: "mat", label: "碳纤维等关键新材料" }, { v: "0", label: "均不属于" },
 ];
-const Q53_OPTS = [{ v: "a", label: "已了解并完成初步评估" }, { v: "b", label: "初步了解" }, { v: "c", label: "尚未了解（建议先行了解并预留审查周期）" }];
-const Q54_OPTS = [{ v: "a", label: "已取得国别风险参考资料" }, { v: "b", label: "尚未取得（请查阅国别指南、信保评级、领事提醒）" }];
+const Q53_OPTS = [{ v: "a", label: "已了解并完成初步评估" }, { v: "b", label: "初步了解" }, { v: "c", label: "尚未了解" }];
+const Q54_OPTS = [{ v: "a", label: "已取得（商务部《对外投资合作国别（地区）指南》、中国信保《国家风险分析报告》评级、外交部领事提醒等）" }, { v: "b", label: "尚未取得" }];

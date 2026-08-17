@@ -179,7 +179,7 @@ const STEP3_CHG: ExtractField[] = [
     { value: "a", label: "已由持股最大境内企业牵头联合申报" },
     { value: "b", label: "持股已测算，联合申报待落实" },
     { value: "c", label: "尚未测算持股比例" },
-  ], note: "仅当 C-2 含 nd 时填", write: (api, v) => api.setSingle("c5", v) },
+  ], note: "仅当 C-3（c3 投资人变化具体情形）含 nd 时填", write: (api, v) => api.setSingle("c5", v) },
   { key: "c6", label: "C-5 投资额与持股比例联动核对", kind: "select", allowed: [
     { value: "a", label: "已核对并纳入变更申请" },
     { value: "b", label: "尚未核对" },
@@ -188,18 +188,18 @@ const STEP3_CHG: ExtractField[] = [
 
 // ─── 模块三 标的与负面清单（step 4）──────────────────────────────────────────
 const STEP4: ExtractField[] = [
+  // 清单值体系对齐交付稿(数字值,清单A 3项/B 7项/C 5项,与向导及速测版一致)
   { key: "lsA", label: "清单A 敏感行业目录（多选）", kind: "multi", allowed: [
-    { value: "a1", label: "敏感行业目录（武器装备、跨境水资源开发利用等）" },
-    { value: "a2", label: "新闻传媒" },
+    { value: "1", label: "武器装备的研制生产维修" }, { value: "2", label: "跨境水资源开发利用" }, { value: "3", label: "新闻传媒" },
   ], note: "均不涉及则省略", write: (api, v) => api.setMulti("lsA", v.split(",")) },
   { key: "lsB", label: "清单B 74号文限制类（多选）", kind: "multi", allowed: [
-    { value: "b1", label: "房地产" }, { value: "b2", label: "酒店、影城、娱乐业、体育俱乐部" },
-    { value: "b3", label: "在境外设立无具体实业的股权投资基金/投资平台" },
+    { value: "1", label: "与未建交、战乱、受国际条约限制的敏感国家（地区）的投资" }, { value: "2", label: "房地产" }, { value: "3", label: "酒店" },
+    { value: "4", label: "影城" }, { value: "5", label: "娱乐业" }, { value: "6", label: "体育俱乐部" },
+    { value: "7", label: "在境外设立无具体实业项目的股权投资基金或投资平台" },
   ], note: "均不涉及则省略", write: (api, v) => api.setMulti("lsB", v.split(",")) },
   { key: "lsC", label: "清单C 74号文禁止类（多选）", kind: "multi", allowed: [
-    { value: "c1", label: "未经国家批准的军工或相关技术" },
-    { value: "c2", label: "运用我国禁止出口的工艺/技术" },
-    { value: "c3", label: "赌博业、色情业等" },
+    { value: "1", label: "未经国家批准的军事工业核心技术和产品输出" }, { value: "2", label: "运用国家禁止出口的技术工艺产品" },
+    { value: "3", label: "赌博业、色情业" }, { value: "4", label: "国际条约禁止的投资" }, { value: "5", label: "其他危害国家利益和安全的投资" },
   ], note: "均不涉及则省略", write: (api, v) => api.setMulti("lsC", v.split(",")) },
   { key: "lsNone", label: "三套负面清单是否均不涉及", kind: "select", allowed: [
     { value: "true", label: "三套清单均不涉及" },

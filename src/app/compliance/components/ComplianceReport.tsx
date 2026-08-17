@@ -1,4 +1,4 @@
-// 合规自查报告渲染 —— 接收纯计算结果 ReportResult，输出 3 类核心报告。
+﻿// 合规自查报告渲染 —— 接收纯计算结果 ReportResult，输出 3 类核心报告。
 // ① 自查报告（档位徽章 + 核心齐备度环 + 结论 + 自查事项明细表）
 // ② 文件齐备度明细表（核心 + 增强双层）
 // ③ 缺件清单 + 行动建议（D→C→B）
@@ -29,7 +29,7 @@ export function ComplianceReport({ report, projectName }: { report: ReportResult
       </div>
       {/* ① 自查报告 */}
       <div style={cardStyle}>
-        <h2 style={h2Style}>企业境外投资自查报告（演示）</h2>
+        <h2 style={h2Style}>企业境外投资自查报告</h2>
         <div style={{ background: C.primaryBg, border: `1px solid ${C.primaryBorder}`, borderRadius: 7, padding: "8px 14px", fontSize: 13, color: C.primary, marginBottom: 8 }}>
           <b>定位声明：</b>本自查为自愿性辅导工具，不是申报条件，任何档位均可依法申报。
         </div>
@@ -144,7 +144,7 @@ export function ComplianceReport({ report, projectName }: { report: ReportResult
       </div>
 
       <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.7, padding: "0 4px" }}>
-        双层声明：本报告由自查系统按企业填报的客观事实自动生成，不构成法律意见；自查结果不代表主管机关审批结论，最终以主管机关依法审查为准。文件齐备度分数仅反映材料齐备程度，不代表合规结论；本演示版上传文件仅读取文件名、内容不上传不留存。
+        双层声明：本报告由自查系统按企业填报的客观事实自动生成，不构成法律意见；自查结果不代表主管机关审批结论，最终以主管机关依法审查为准。文件齐备度分数仅反映材料齐备程度，不代表合规结论；上传文件仅用于本次自查计分与报告生成。
       </div>
     </div>
   );

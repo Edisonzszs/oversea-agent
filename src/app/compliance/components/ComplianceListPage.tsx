@@ -75,7 +75,7 @@ export function ComplianceListPage({ projects, totalCount, activeCount, doneCoun
         )}
 
         <div style={{ marginTop: 24, fontSize: 11.5, color: C.muted, background: "#fff", borderRadius: 10, border: `1px solid ${C.line}`, padding: "12px 16px", lineHeight: 1.7 }}>
-          本自查为自愿性辅导工具，不是申报条件，任何档位均可依法申报。文件齐备度分数仅反映材料齐备程度，不代表合规结论；上传文件仅读取文件名、内容不上传不留存。
+          本自查为自愿性辅导工具，不是申报条件，任何档位均可依法申报。文件齐备度分数仅反映材料齐备程度，不代表合规结论；上传文件仅用于本次自查计分与报告生成。
         </div>
       </div>
     </div>

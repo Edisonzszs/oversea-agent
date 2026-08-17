@@ -1,4 +1,4 @@
-// 独立 HTML 报告生成器 —— 从 ReportResult 生成完整可打印 HTML 页面。
+﻿// 独立 HTML 报告生成器 —— 从 ReportResult 生成完整可打印 HTML 页面。
 // CSS 沿用 HTML 第五版模板设计 token（#00355F 海军蓝、宋体、卡片布局）。
 // 新窗口打开后自动触发 window.print() → 用户另存 PDF。
 
@@ -111,7 +111,7 @@ ${actionItems}
 <h2>文件编制清单（按投资方式分支输出）</h2>
 <table><thead><tr><th style="width:70%">应编制文件</th><th style="width:30%">形式要件</th></tr></thead><tbody>${docRows}</tbody></table>
 </div>
-<div class="disclaimer">双层声明：本报告由自查系统按企业填报的客观事实自动生成，不构成法律意见；自查结果不代表主管机关审批结论，最终以主管机关依法审查为准。文件齐备度分数仅反映材料齐备程度，不代表合规结论；本演示版上传文件仅读取文件名、内容不上传不留存。</div>
+<div class="disclaimer">双层声明：本报告由自查系统按企业填报的客观事实自动生成，不构成法律意见；自查结果不代表主管机关审批结论，最终以主管机关依法审查为准。文件齐备度分数仅反映材料齐备程度，不代表合规结论；上传文件仅用于本次自查计分与报告生成。</div>
 </div>
 <script>window.onload=function(){setTimeout(function(){window.print()},300)};</script>
 </body></html>`;
