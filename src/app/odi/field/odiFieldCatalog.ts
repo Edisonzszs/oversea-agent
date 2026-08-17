@@ -20,12 +20,18 @@ const R1: FieldDef[] = [
 // R2 项目情况
 const R2: FieldDef[] = [
   { code: "domestic_company_name", name: "境内公司名称", round: 2, dept: "shared", required: true, note: "企业主档复用(认证预填)" },
+  { code: "uscc", name: "统一社会信用代码", round: 2, dept: "ndrc", note: "18位[0-9A-Z];由备案表/营业执照识别(P2 发改侧,多来源比对)" },
   { code: "overseas_company_cn", name: "境外企业中文名称", round: 2, dept: "shared", required: true },
   { code: "overseas_company_en", name: "境外企业外文名称", round: 2, dept: "shared" },
   { code: "direct_destination", name: "直接目的地", round: 2, dept: "shared", required: true, note: "第一层级境外企业所在地;单层路径可与最终目的地相同(流程文档#11:两档分别保存)" },
   { code: "final_destination", name: "投资目的地(最终目的地)", round: 2, dept: "shared", required: true, note: "最终项目经营/建设/并购标的所在地" },
   { code: "business_scope", name: "经营范围", round: 2, dept: "shared", required: true },
   { code: "industry", name: "所属行业", round: 2, dept: "shared", required: true },
+  // 发改侧财务四科目(万元人民币;取数口径见 E-011~E-014:由备案表↔审计报告比对)
+  { code: "total_assets", name: "总资产(万元)", round: 2, dept: "ndrc", kind: "currency", note: "取资产负债表「负债和所有者权益合计」" },
+  { code: "net_assets", name: "净资产(万元)", round: 2, dept: "ndrc", kind: "currency", note: "取「所有者权益合计」" },
+  { code: "main_business_revenue", name: "主营业务收入(万元)", round: 2, dept: "ndrc", kind: "currency", note: "取利润表「营业收入」" },
+  { code: "net_profit", name: "净利润(万元)", round: 2, dept: "ndrc", kind: "currency", note: "取利润表「净利润」,负数保留原值" },
 ];
 
 // R3 投资结构
@@ -71,6 +77,7 @@ const R5: FieldDef[] = [
 
 // R6 项目说明
 const R6: FieldDef[] = [
+  { code: "project_name", name: "项目名称", round: 6, dept: "ndrc", note: "发改口径:投资主体+目的地+投资内容关键词;备案表/请示/承诺书四处一致(P2 发改侧)" },
   { code: "project_summary", name: "项目简况", round: 6, dept: "shared", required: true, note: "伴填可起草;禁编造收益/就业/税收/市场规模/经营业绩/风险事实" },
   { code: "project_significance", name: "项目意义", round: 6, dept: "shared", required: true },
 ];

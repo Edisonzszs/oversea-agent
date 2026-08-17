@@ -10,6 +10,15 @@ export interface FieldSource {
   evidence?: string;
 }
 
+/** 材料键(统一字段池的多来源值 —— 流程文档 §9:同一字段多值全部保留,不自动覆盖) */
+export type OdiMaterialKey = "备案表" | "营业执照" | "审计报告" | "承诺书" | "请示" | "资金证明";
+
+/** 单份材料识别出的该字段值(供发改委跨材料一致性规则比对) */
+export interface MaterialValue {
+  material: OdiMaterialKey;
+  value: string;
+}
+
 export interface OdiField {
   code: string;
   name: string;
@@ -20,6 +29,8 @@ export interface OdiField {
   round?: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   confidence?: number;
   derived?: boolean;
+  /** 多来源材料值(备案表/执照/审计/承诺书/请示各自识别值);无材料解析时缺省 */
+  materialValues?: MaterialValue[];
   updatedAt: number;
 }
 

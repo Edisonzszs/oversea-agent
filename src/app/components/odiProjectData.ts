@@ -1,5 +1,5 @@
-import { createGuideProject } from "../odi/data/odiProjects";
-import { applyLinkage, commitField, computeDerived } from "../odi/field/odiGuideLogic";
+﻿import { createGuideProject } from "../odi/data/odiProjects";
+import { applyLinkage, commitField, computeDerived, setMaterialValues } from "../odi/field/odiGuideLogic";
 import type { OdiField } from "../odi/data/types";
 
 // ─── Service type ───────────────────────────────────────────────────────────
@@ -75,11 +75,34 @@ export function progressFromStatus(status: AssistStatus): ("done" | "current" | 
 }
 
 /** 助办演示字段池：POC 未接 OCR，首次上传后按场景预设模拟"已解析"。
- *  injectIssues=true 时注入 3 处典型问题（注册资本>总额 / 项目说明缺失 / 境外企业名缺失）
- *  以演示三态校验；false 为干净池（全部通过，对应已完成项目）。
+ *  injectIssues=true 时注入典型问题（注册资本>总额 / 项目说明缺失 / 境外企业名缺失 /
+ *  执照 USCC 末位与备案表不一致）以演示三态校验；false 为干净池（全部通过，对应已完成项目）。
+ *  P2:同时注入发改侧材料多来源值（备案表/执照/审计/承诺书/请示），供 NDRC 跨材料规则比对。
  *  池就绪后接线引导逻辑：computeDerived(人民币金额按汇率派生) + applyLinkage(单一中方默认)。 */
 export function seedAssistFieldPool(injectIssues: boolean): OdiField[] {
   let pool = createGuideProject("助办(模拟已解析)", "新设独资", "快速体验").fieldPool;
+  const ENTITY = "上海XX智能装备集团有限公司";
+  const PROJECT = `${ENTITY}在越南新建智能装备生产基地项目`;
+  const USCC = "91310000MA1FL2XX3A";
+  // 发改侧材料识别值(演示:备案表为事实基准,其余材料与其比对)
+  pool = commitField(pool, "project_name", PROJECT, "upload");
+  pool = setMaterialValues(pool, "project_name", [
+    { material: "备案表", value: PROJECT },
+    { material: "请示", value: PROJECT }, // 请示标题提取出的项目名(B-002 口径)
+    { material: "承诺书", value: PROJECT },
+  ]);
+  pool = commitField(pool, "uscc", USCC, "upload");
+  pool = setMaterialValues(pool, "uscc", [
+    { material: "备案表", value: USCC },
+    // 问题池:营业执照末位与备案表不一致 → NDRC-A-006 不通过
+    { material: "营业执照", value: injectIssues ? "91310000MA1FL2XX3B" : USCC },
+  ]);
+  pool = setMaterialValues(pool, "domestic_company_name", (["备案表", "营业执照", "审计报告", "承诺书", "请示"] as const).map(m => ({ material: m, value: ENTITY })));
+  const fin: Record<string, string> = { total_assets: "12000", net_assets: "8000", main_business_revenue: "15000", net_profit: "2000" };
+  for (const [code, v] of Object.entries(fin)) {
+    pool = commitField(pool, code, v, "upload");
+    pool = setMaterialValues(pool, code, [{ material: "备案表", value: v }, { material: "审计报告", value: v }]);
+  }
   if (injectIssues) {
     pool = commitField(pool, "overseas_registered_capital", "900万美元", "upload"); // 注册资本>总额 → 商务委不通过
     pool = commitField(pool, "project_summary", "", "upload");                       // 项目说明缺失 → 发改委缺失
@@ -144,9 +167,9 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     status: "材料校验中",
     investmentType: "新设",
     uploadedCount: 6,
-    mismatchCount: 1,
+    mismatchCount: 2,
     missingCount: 2,
-    passedCount: 22,
+    passedCount: 29,
     generatedCount: 2,
     updatedAt: "今天 14:32",
     materials: [
@@ -186,7 +209,7 @@ export const MOCK_ODI_PROJECTS: OdiProject[] = [
     uploadedCount: 6,
     mismatchCount: 0,
     missingCount: 0,
-    passedCount: 25,
+    passedCount: 33,
     generatedCount: 5,
     updatedAt: "2026年7月15日",
     materials: [

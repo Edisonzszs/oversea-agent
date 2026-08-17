@@ -9,7 +9,8 @@ import {
   type AssistProject,
 } from "./odiProjectData";
 import type { AssistantContext } from "./OdiProjectAssistantPanel";
-import { validateOdiPool, getIssues, type ValidationResult } from "../odi/validation/odiValidationEngine";
+import { getIssues, type ValidationResult } from "../odi/validation/odiValidationEngine";
+import { validateOdiFull } from "../odi/validation/odiNdrcRules";
 
 type DetailTab = "overview" | "materials" | "review" | "generate";
 
@@ -689,7 +690,8 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
   const cfg = PROJECT_STATUS_CONFIG[project.status];
 
   // 校验中心/驾驶舱全部吃项目自身字段池的实算结果（原先用模块级写死演示池）
-  const validation = useMemo(() => validateOdiPool(project.fieldPool ?? []), [project.fieldPool]);
+  // P2:组合引擎 = 商务线 13 条即时校验 + 发改委首批跨材料规则
+  const validation = useMemo(() => validateOdiFull(project.fieldPool ?? []), [project.fieldPool]);
 
   // 卸载时清掉识别/校验的演示定时器
   useEffect(() => () => { timersRef.current.forEach(t => window.clearTimeout(t)); }, []);

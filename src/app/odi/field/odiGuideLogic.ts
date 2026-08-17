@@ -1,10 +1,19 @@
-import type { OdiField } from "../data/types";
+import type { MaterialValue, OdiField } from "../data/types";
 
 export function getVal(pool: OdiField[], code: string): string {
   return pool.find(f => f.code === code)?.value ?? "";
 }
 function setField(pool: OdiField[], code: string, mut: (f: OdiField) => void): OdiField[] {
   return pool.map(f => { if (f.code === code) { const c = { ...f }; mut(c); return c; } return f; });
+}
+
+/** 写入多来源材料值(统一字段池语义:多值全部保留,不自动覆盖;同材料键则替换该条)。 */
+export function setMaterialValues(pool: OdiField[], code: string, mvs: MaterialValue[]): OdiField[] {
+  return setField(pool, code, f => {
+    const kept = (f.materialValues ?? []).filter(m => !mvs.some(n => n.material === m.material));
+    f.materialValues = [...kept, ...mvs];
+    f.updatedAt = Date.now();
+  });
 }
 
 export function commitField(pool: OdiField[], code: string, value: string, origin: "guide"|"upload"|"auth"|"ai"|"derived"): OdiField[] {

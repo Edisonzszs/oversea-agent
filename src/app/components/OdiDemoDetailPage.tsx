@@ -4,7 +4,8 @@ import type { DemoProject } from "./odiProjectData";
 import { allFieldDefs } from "../odi/field/odiFieldCatalog";
 import { emptyField, type OdiField } from "../odi/data/types";
 import { applyLinkage, commitField, computeDerived } from "../odi/field/odiGuideLogic";
-import { validateOdiPool, type ValidationCheck, type ValidationResult } from "../odi/validation/odiValidationEngine";
+import { type ValidationCheck, type ValidationResult } from "../odi/validation/odiValidationEngine";
+import { validateOdiFull } from "../odi/validation/odiNdrcRules";
 
 type Tab = "overview" | "form" | "verify" | "result";
 type Scene = "新设独资" | "并购" | "增资变更";
@@ -726,7 +727,7 @@ export function OdiDemoDetailPage({ project, onBack }: Props) {
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const verifyResult = useMemo(() => {
     const pool = applyLinkage(computeDerived(caseToPool(project.scene as Scene, overrides)));
-    return validateOdiPool(pool);
+    return validateOdiFull(pool); // P2:商务线 + 发改委首批(演示池无材料值,NDRC 规则未触发,不产生噪音)
   }, [project.scene, overrides]);
   const evaluatedCount = verifyResult.checks.filter(c => c.status !== "未触发").length;
   const handleCommit = (key: string, value: string) => {
