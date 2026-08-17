@@ -1,11 +1,14 @@
-// 语音输入 + 发送按钮组件 —— 使用浏览器 Web Speech API，支持中文识别。
-// 视觉对齐 ChatGPT / 豆包：
-//   MicGlyph     —— 实心胶囊麦克风图标(替代旧细描边)
-//   MicButton    —— 录音中变红 + 双层脉冲扩散环 + 白色停止符
-//   RecordingBar —— 录音态占据输入框内部：红点 + 7 根声纹 + 计时 + 实时识别文本
-//   SendButton   —— 向上箭头三态(禁用灰/可发送蓝/loading spinner)；
-//                   传 onStop 且 loading 时变「停止生成」方块钮(可中断流式输出)
-// useVoiceInput 额外提供 elapsed(录音秒数)与 interim(实时中间识别文本)。
+// 语音听写 + 发送按钮组件 —— 使用浏览器 Web Speech API，支持中文识别。
+// 视觉对齐 Codex / ChatGPT 听写形态：
+//   MicGlyph          —— 实心胶囊麦克风图标(待录音)
+//   MicButton         —— 开始听写按钮
+//   TravelingWave     —— 持续横向移动的声纹(正弦波无缝滚动)
+//   RecordingBar      —— 听写态占据输入框内部:红点 + 移动声纹 + 计时 + 实时识别文本
+//   DictationControls —— 听写中替换 麦克风+发送:✗ 取消听写 / ✓ 完成听写
+//   SendButton        —— 向上箭头三态(禁用灰/可发送蓝/loading spinner);
+//                        传 onStop 且 loading 时变「停止生成」方块钮(可中断流式输出)
+// useVoiceInput 采用会话缓冲:识别文本先积累在 sessionText,✓(confirm)才写入输入框,
+// ✗(cancel)全部丢弃;interim 为实时中间识别文本。
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import gsap from "gsap";
@@ -28,16 +31,19 @@ function getSpeechRecognition(): (new () => SpeechRecognitionType) | null {
   return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
 }
 
-export function useVoiceInput(onResult: (text: string) => void, onInterim?: (text: string) => void) {
+// onCommit:点 ✓ 后把本次听写的落定文本一次性交回调用方写入输入框
+export function useVoiceInput(onCommit: (text: string) => void, onInterim?: (text: string) => void) {
   const [listening, setListening] = useState(false);
   // supported 用惰性初始化(渲染期一次性探测,SSR 安全):同组件多次渲染不重复 setState
   const [supported, setSupported] = useState(() => getSpeechRecognition() != null);
-  const [elapsed, setElapsed] = useState(0); // 录音时长(秒),驱动录音条计时
+  const [elapsed, setElapsed] = useState(0);        // 听写时长(秒),驱动录音条计时
+  const [sessionText, setSessionText] = useState(""); // 本次听写已落定文本(✓ 才提交)
   const recogRef = useRef<SpeechRecognitionType | null>(null);
-  const wantListenRef = useRef(false); // 用户意图仍在录音(onend 自动重启用)
-  const onResultRef = useRef(onResult);
+  const wantListenRef = useRef(false); // 用户意图仍在听写(onend 自动重启用)
+  const sessionRef = useRef("");
+  const onCommitRef = useRef(onCommit);
   const onInterimRef = useRef(onInterim);
-  onResultRef.current = onResult;
+  onCommitRef.current = onCommit;
   onInterimRef.current = onInterim;
 
   // 初始化(挂载后建识别器)
@@ -53,13 +59,15 @@ export function useVoiceInput(onResult: (text: string) => void, onInterim?: (tex
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
         const t = res?.[0]?.transcript ?? "";
-        if (res.isFinal) { if (t) onResultRef.current(t); }
-        else interim += t;
+        if (res.isFinal) {
+          // 落定文本进会话缓冲(不直接写输入框,等 ✓ 提交)
+          if (t) { sessionRef.current += t; setSessionText(sessionRef.current); }
+        } else interim += t;
       }
       onInterimRef.current?.(interim);
     };
     r.onend = () => {
-      // Chrome 静音超时会自动停:用户还在录音则重启
+      // Chrome 静音超时会自动停:用户还在听写则重启(会话缓冲保留)
       if (wantListenRef.current) { try { r.start(); } catch { setListening(false); } }
       else setListening(false);
     };
@@ -68,7 +76,7 @@ export function useVoiceInput(onResult: (text: string) => void, onInterim?: (tex
     return () => { wantListenRef.current = false; try { r.stop(); } catch {} recogRef.current = null; };
   }, []);
 
-  // 录音计时(录音中每 0.4s 刷新,停止归零)
+  // 听写计时(听写中每 0.4s 刷新,停止归零)
   useEffect(() => {
     if (!listening) { setElapsed(0); return; }
     const t0 = Date.now();
@@ -77,72 +85,99 @@ export function useVoiceInput(onResult: (text: string) => void, onInterim?: (tex
     return () => clearInterval(iv);
   }, [listening]);
 
-  const toggle = useCallback(() => {
+  const stop = useCallback(() => {
+    wantListenRef.current = false;
+    try { recogRef.current?.stop(); } catch {}
+    setListening(false);
+    onInterimRef.current?.("");
+  }, []);
+
+  const clearSession = useCallback(() => { sessionRef.current = ""; setSessionText(""); }, []);
+
+  const start = useCallback(() => {
     if (!recogRef.current) return;
-    if (listening) {
-      wantListenRef.current = false;
-      recogRef.current.stop();
-      setListening(false);
-      onInterimRef.current?.("");
-    } else {
-      wantListenRef.current = true;
-      try { recogRef.current.start(); setListening(true); } catch {}
-    }
-  }, [listening]);
+    clearSession();
+    wantListenRef.current = true;
+    try { recogRef.current.start(); setListening(true); } catch {}
+  }, [clearSession]);
 
-  return { listening, supported, elapsed, toggle };
-}
+  // ✓ 完成听写:停止并把会话文本写入输入框
+  const confirm = useCallback(() => {
+    const t = sessionRef.current;
+    stop();
+    clearSession();
+    if (t) onCommitRef.current(t);
+  }, [stop, clearSession]);
 
-// ─── 声纹柱(录音中的跳动条;Web Speech 无音量回调,用错峰 CSS 动画模拟) ─────────
-function VoiceBars({ scale = 1, count = 5 }: { scale?: number; count?: number }) {
-  // 每根不同 duration/delay 制造自然错落;reduced-motion 时 CSS 里会停
-  const bars = [
-    { d: 0.9, delay: 0 },
-    { d: 0.7, delay: 0.15 },
-    { d: 1.1, delay: 0.05 },
-    { d: 0.8, delay: 0.25 },
-    { d: 1.0, delay: 0.1 },
-    { d: 0.75, delay: 0.2 },
-    { d: 0.95, delay: 0.35 },
-  ].slice(0, count);
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 2 * scale, height: 18 * scale, flexShrink: 0 }}>
-      <style>{`
-        @keyframes voiceBar{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
-        @media (prefers-reduced-motion: reduce){.vb{animation:none !important;transform:scaleY(.6)}}
-      `}</style>
-      {bars.map((b, i) => (
-        <span key={i} className="vb"
-          style={{ width: 3 * scale, height: 16 * scale, borderRadius: 2, background: "#dc2626", transformOrigin: "center", animation: `voiceBar ${b.d}s ease-in-out ${b.delay}s infinite` }} />
-      ))}
-    </span>
-  );
+  // ✗ 取消听写:停止并丢弃全部识别文本
+  const cancel = useCallback(() => {
+    stop();
+    clearSession();
+  }, [stop, clearSession]);
+
+  // 兼容旧调用:未进入 ×/✓ 界面时的切换(听写中 = 确认提交)
+  const toggle = useCallback(() => {
+    if (listening) confirm();
+    else start();
+  }, [listening, confirm, start]);
+
+  return { listening, supported, elapsed, sessionText, toggle, confirm, cancel };
 }
 
 function formatElapsed(s: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// ─── 录音条(录音态占据输入框内部,替代 textarea 的视觉;ChatGPT/豆包式) ─────────
-export function RecordingBar({ elapsed, interim, compact = false }: { elapsed: number; interim?: string; compact?: boolean }) {
+// ─── 持续移动的声纹(Codex 式:横向往一个方向无缝滚动的正弦波) ────────────────
+function TravelingWave({ height = 26, color = "#dc2626" }: { height?: number; color?: string }) {
+  const W = 800;              // 总宽 = 整数个周期,平移 -50%(400px)无缝循环
+  const HALF = 20;            // 半周期宽
+  const base = height / 2;
+  const amp = height * 0.6;   // 二次曲线控制点高度(视觉峰约其一半)
+  let d = `M0 ${base} q ${HALF} ${-amp} ${HALF * 2} 0`;
+  for (let x = HALF * 2; x < W; x += HALF * 2) d += ` t ${HALF * 2} 0`;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 1 : 2, minWidth: 0, flex: 1 }}>
-      <style>{`
-        @keyframes recDot{0%,100%{opacity:1}50%{opacity:.25}}
-        @media (prefers-reduced-motion: reduce){.rd{animation:none !important}}
-      `}</style>
-      <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 10, minHeight: compact ? 20 : 36 }}>
-        <span className="rd" style={{ width: compact ? 7 : 9, height: compact ? 7 : 9, borderRadius: "50%", background: "#dc2626", flexShrink: 0, animation: "recDot 1.1s ease-in-out infinite" }} />
-        <VoiceBars scale={compact ? 0.75 : 1.05} count={7} />
-        <span style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", letterSpacing: 0.5 }}>{formatElapsed(elapsed)}</span>
-        {!compact && <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>再次点击麦克风结束录音</span>}
-      </div>
-      {interim && <div style={{ fontSize: compact ? 11.5 : 12, color: "#b91c1c", fontStyle: "italic", lineHeight: 1.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>正在识别：{interim}…</div>}
+    <div style={{ flex: 1, minWidth: 30, height, overflow: "hidden" }}>
+      <style>{`@keyframes waveScroll{to{transform:translateX(-400px)}}`}</style>
+      <svg className="tw" width={W} height={height} viewBox={`0 0 ${W} ${height}`}
+        style={{ display: "block", animation: "waveScroll 2.4s linear infinite" }}>
+        <path d={d} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" />
+      </svg>
     </div>
   );
 }
 
-// ─── 实心麦克风图标(胶囊机身 + 弧形支架,替代旧细描边) ────────────────────────
+// ─── 听写条(听写态占据输入框内部,替代 textarea 的视觉;Codex 式) ─────────────
+export function RecordingBar({ elapsed, sessionText = "", interim, compact = false }: {
+  elapsed: number; sessionText?: string; interim?: string; compact?: boolean;
+}) {
+  const hasText = !!(sessionText || interim);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 1 : 3, minWidth: 0, flex: 1 }}>
+      <style>{`
+        @keyframes recDot{0%,100%{opacity:1}50%{opacity:.25}}
+        @media (prefers-reduced-motion: reduce){.rd{animation:none !important}.tw{animation:none !important}}
+      `}</style>
+      <div style={{ display: "flex", alignItems: "center", gap: compact ? 6 : 10, minHeight: compact ? 20 : 36 }}>
+        <span className="rd" style={{ width: compact ? 7 : 9, height: compact ? 7 : 9, borderRadius: "50%", background: "#dc2626", flexShrink: 0, animation: "recDot 1.1s ease-in-out infinite" }} />
+        <TravelingWave height={compact ? 16 : 26} />
+        <span style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", letterSpacing: 0.5 }}>{formatElapsed(elapsed)}</span>
+      </div>
+      <div style={{ fontSize: compact ? 11.5 : 12.5, lineHeight: 1.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {hasText ? (
+          <>
+            <span style={{ color: "#b91c1c", fontWeight: 600 }}>{sessionText}</span>
+            {interim && <span style={{ color: "#dc2626", fontStyle: "italic" }}>{sessionText ? " " : ""}{interim}…</span>}
+          </>
+        ) : (
+          <span style={{ color: "#94a3b8" }}>{compact ? "正在聆听…说出您的问题" : "正在聆听，识别内容会实时显示在这里（✓ 完成听写，✗ 取消）"}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── 实心麦克风图标(胶囊机身 + 弧形支架) ────────────────────────────────────
 function MicGlyph({ size, color }: { size: number; color: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
@@ -155,40 +190,66 @@ function MicGlyph({ size, color }: { size: number; color: string }) {
 
 // ─── 麦克风按钮(md=34px 首页 / sm=22px 伴填,热区已保证) ──────────────────────
 // supported=false 时仍渲染按钮(探测可能因双模块实例/环境差异失灵),点击时提示不支持。
-// 录音中的声纹/计时/识别文本由 RecordingBar 在输入框内部呈现,这里只保留按钮本体。
-export function MicButton({ listening, supported, onClick, size = "md" as "md" | "sm" }: {
-  listening: boolean; supported: boolean; onClick: () => void; size?: "md" | "sm";
+// 听写中的停止/取消/确认由 DictationControls 负责,本按钮只在待录音时渲染。
+export function MicButton({ supported, onClick, size = "md" as "md" | "sm" }: {
+  supported: boolean; onClick: () => void; size?: "md" | "sm";
 }) {
   const box = size === "sm" ? 22 : 34;
   const icon = size === "sm" ? 12 : 16;
   const fire = () => { if (!supported) { alert("当前浏览器不支持语音输入，请使用 Chrome/Edge"); return; } onClick(); };
 
   return (
-    <button onClick={fire} title={listening ? "停止语音输入" : "语音输入"} aria-label={listening ? "停止语音输入" : "语音输入"}
+    <button onClick={fire} title="语音输入" aria-label="语音输入"
       style={{
-        position: "relative", width: box, height: box, borderRadius: "50%", border: "none", flexShrink: 0,
-        background: listening ? "#dc2626" : "#e8edf5", cursor: "pointer",
+        width: box, height: box, borderRadius: "50%", border: "none", flexShrink: 0,
+        background: "#e8edf5", cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
         transition: `background .15s, transform ${DUR.micro}s ${EASE.micro}`,
-        boxShadow: listening ? "0 2px 10px rgba(220,38,38,0.4)" : "none",
       }}
-      onMouseEnter={e => { if (!listening) e.currentTarget.style.background = "#dde4f0"; }}
-      onMouseLeave={e => { if (!listening) e.currentTarget.style.background = "#e8edf5"; }}>
-      {/* 录音中:双层脉冲扩散环(仅装饰动画,合成器友好) */}
-      {listening && (
-        <>
-          <style>{`@keyframes micRing{0%{transform:scale(1);opacity:.55}100%{transform:scale(1.9);opacity:0}}`}</style>
-          <span style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px solid #dc2626", animation: "micRing 1.4s ease-out infinite", pointerEvents: "none" }} />
-          <span style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px solid #dc2626", animation: "micRing 1.4s ease-out .7s infinite", pointerEvents: "none" }} />
-        </>
-      )}
-      {listening ? (
-        // 录音中:方形停止符(ChatGPT 式)
-        <span style={{ width: size === "sm" ? 8 : 11, height: size === "sm" ? 8 : 11, borderRadius: 2, background: "#fff" }} />
-      ) : (
-        <MicGlyph size={icon} color="#64748b" />
-      )}
+      onMouseEnter={e => { e.currentTarget.style.background = "#dde4f0"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = "#e8edf5"; }}>
+      <MicGlyph size={icon} color="#64748b" />
     </button>
+  );
+}
+
+// ─── 听写确认控件(听写中替换 麦克风+发送:✗ 取消 / ✓ 完成;Codex 式) ───────────
+export function DictationControls({ onConfirm, onCancel, size = "md" as "md" | "sm" }: {
+  onConfirm: () => void; onCancel: () => void; size?: "md" | "sm";
+}) {
+  const box = size === "sm" ? 24 : 34;
+  const icon = size === "sm" ? 13 : 16;
+  const press = {
+    onMouseDown: (e: React.MouseEvent<HTMLButtonElement>) => gsap.to(e.currentTarget, { scale: 0.92, duration: 0.09, ease: "power2.out" }),
+    onMouseUp: (e: React.MouseEvent<HTMLButtonElement>) => gsap.to(e.currentTarget, { scale: 1, duration: 0.12, ease: EASE.micro }),
+  };
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: size === "sm" ? 6 : 8, flexShrink: 0 }}>
+      {/* ✗ 取消听写:丢弃全部识别文本 */}
+      <button onClick={onCancel} title="取消听写" aria-label="取消听写"
+        style={{
+          width: box, height: box, borderRadius: "50%", border: "1px solid #e8b4b4", background: "#fff",
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          transition: "background .15s",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = "#fdf3f3"; gsap.to(e.currentTarget, { y: -1, duration: DUR.micro, ease: EASE.micro }); }}
+        onMouseLeave={e => { e.currentTarget.style.background = "#fff"; gsap.to(e.currentTarget, { y: 0, duration: DUR.micro, ease: EASE.micro }); }}
+        {...press}>
+        <svg width={icon} height={icon} viewBox="0 0 16 16" fill="none"><path d="M4.8 4.8l6.4 6.4M11.2 4.8l-6.4 6.4" stroke="#dc2626" strokeWidth="1.8" strokeLinecap="round" /></svg>
+      </button>
+      {/* ✓ 完成听写:识别文本写入输入框 */}
+      <button onClick={onConfirm} title="完成听写" aria-label="完成听写"
+        style={{
+          width: box, height: box, borderRadius: "50%", border: "none", background: "#1a5bc6",
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          boxShadow: "0 2px 8px rgba(26,91,198,0.35)", transition: "background .15s",
+        }}
+        onMouseEnter={e => { gsap.to(e.currentTarget, { y: -1, boxShadow: "0 4px 10px rgba(26,91,198,0.45)", duration: DUR.micro, ease: EASE.micro }); }}
+        onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, boxShadow: "0 2px 8px rgba(26,91,198,0.35)", duration: DUR.micro, ease: EASE.micro }); }}
+        {...press}>
+        <svg width={icon} height={icon} viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3.2 3.2 5.8-6.6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+    </span>
   );
 }
 

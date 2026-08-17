@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { ChatMessage } from "./conversationData";
-import { useVoiceInput, MicButton, SendButton, RecordingBar } from "./VoiceInput";
+import { useVoiceInput, MicButton, SendButton, RecordingBar, DictationControls } from "./VoiceInput";
 
 // 将 Markdown 风格的 **粗体** 和 *斜体* 转为 React 元素，纯文本渲染（避免显示 ** 符号）。
 function RichText({ text }: { text: string }) {
@@ -204,7 +204,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {voice.listening ? (
-              <RecordingBar elapsed={voice.elapsed} interim={interim} />
+              <RecordingBar elapsed={voice.elapsed} sessionText={voice.sessionText} interim={interim} />
             ) : (
               <>
                 <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
@@ -216,8 +216,14 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
               </>
             )}
           </div>
-          <MicButton listening={voice.listening} supported={voice.supported} onClick={voice.toggle} />
-          <SendButton size="md" loading={loading} disabled={!input.trim() || voice.listening} onClick={() => send()} onStop={stopStream} />
+          {voice.listening ? (
+            <DictationControls size="md" onConfirm={voice.confirm} onCancel={voice.cancel} />
+          ) : (
+            <>
+              <MicButton supported={voice.supported} onClick={voice.toggle} />
+              <SendButton size="md" loading={loading} disabled={!input.trim()} onClick={() => send()} onStop={stopStream} />
+            </>
+          )}
         </div>
       </div>
     </div>
