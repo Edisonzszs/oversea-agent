@@ -2,8 +2,8 @@
 // 视觉对齐 ChatGPT / Codex / Claude 听写形态：
 //   MicGlyph          —— 实心胶囊麦克风图标(待录音)
 //   MicButton         —— 开始听写按钮
-//   SpectrumBars      —— 频谱声纹条:getUserMedia+AnalyserNode 取真实音量/频率驱动,
-//                        说话条随声音起伏、静默落矮;拿不到频谱时降级为模拟错峰动画
+//   VoiceWaveform     —— 滚动声纹(ChatGPT/Doist Ramble 同款):Canvas 渲染,RMS 响度驱动,
+//                        新条右进旧条左滚,静音画矮灰条;拿不到频谱时降级为模拟包络
 //   RecordingBar      —— 听写态占据输入框内部:蓝点 + 频谱条 + 计时 + 实时识别文本
 //   DictationControls —— 听写中替换 麦克风+发送:✗ 取消听写 / ✓ 完成听写
 //   SendButton        —— 向上箭头三态(禁用灰/可发送蓝/loading spinner);
@@ -161,65 +161,119 @@ function formatElapsed(s: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// ─── 频谱声纹条(ChatGPT 式:真实音量/频率驱动,细圆角竖条随声音起伏) ───────────
-// 固定细条宽 + space-between 铺满整行;rAF 逐帧直改 transform(零重渲染);
-// meterRef 为空(无权限/非安全上下文)时降级为模拟错峰动画。
-export function SpectrumBars({ meterRef, count = 32, color = "#94a3b8", height = 14, barWidth = 2 }: {
-  meterRef: React.MutableRefObject<AudioMeter | null>; count?: number; color?: string; height?: number; barWidth?: number;
-}) {
-  const wrapRef = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return; // 静态低条
-    let raf = 0;
-    const bars = Array.from(wrapRef.current?.children ?? []) as HTMLElement[];
-    const levels = new Array(count).fill(0.12);
-    const t0 = performance.now();
-    const loop = () => {
-      const m = meterRef.current;
-      if (m) {
-        // 真实频谱:取语音能量集中段(约 0~9kHz),均分 count 组,组内取峰值
-        m.analyser.getByteFrequencyData(m.data as any);
-        const bins = m.data;
-        const usable = Math.max(count, Math.floor(bins.length * 0.4));
-        for (let i = 0; i < count; i++) {
-          const from = Math.floor(i * usable / count);
-          const to = Math.max(from + 1, Math.floor((i + 1) * usable / count));
-          let peak = 0;
-          for (let j = from; j < to && j < bins.length; j++) if (bins[j] > peak) peak = bins[j];
-          const target = Math.min(1, (peak / 255) * 1.15); // 克制增益,小幅起伏
-          levels[i] += (target - levels[i]) * 0.3;
-        }
-      } else {
-        // 降级模拟:错峰正弦,安静地小幅度起伏
-        const t = (performance.now() - t0) / 1000;
-        for (let i = 0; i < count; i++) {
-          const v = 0.15 + 0.22 * (Math.sin(t * (2.1 + (i % 5) * 0.35) + i * 0.9) * 0.5 + 0.5);
-          levels[i] += (v - levels[i]) * 0.25;
-        }
-      }
-      for (let i = 0; i < count; i++) {
-        const bar = bars[i];
-        if (!bar) continue;
-        bar.style.transform = `scaleY(${0.1 + levels[i] * 0.55})`;
-        bar.style.opacity = String(0.55 + levels[i] * 0.45);
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [meterRef, count]);
-
-  return (
-    <span ref={wrapRef} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", height, flex: 1, minWidth: 0, overflow: "hidden" }}>
-      {Array.from({ length: count }).map((_, i) => (
-        <span key={i} style={{ width: barWidth, height: "100%", borderRadius: 2, background: color, flexShrink: 0, transformOrigin: "center", transform: "scaleY(0.15)", willChange: "transform" }} />
-      ))}
-    </span>
-  );
+// ─── 滚动声纹(主流 AI 听写同款:ChatGPT/Doist Ramble 形态) ────────────────────
+// Canvas 渲染(每帧重绘,无 DOM reconciliation);RMS 响度驱动(比频谱峰值平滑);
+// 新条从右进入、旧条向左滚动(帧率无关的时间步进,后台切回不跳变);
+// 静音门限以下画矮灰条(滤环境底噪);拿不到频谱时降级为安静起伏的模拟包络。
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
-// ─── 听写条(听写态占据输入框内部:灰色频谱铺满整行、上下居中;计时叠加右端淡出) ──
+export function VoiceWaveform({ meterRef, height = 22, barWidth = 3, gap = 3, minH = 3, maxH = 18, intervalMs = 70, color = "#94a3b8", muted = "#d7dee9" }: {
+  meterRef: React.MutableRefObject<AudioMeter | null>; height?: number; barWidth?: number; gap?: number; minH?: number; maxH?: number; intervalMs?: number; color?: string; muted?: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+    let raf = 0;
+    let w = 0;
+    const step = barWidth + gap;
+    const maxBars = Math.ceil(2400 / step) + 2; // 环形历史容量,足够覆盖任意宽度
+    const heights = new Float32Array(maxBars);  // [0] 最新
+    const muteds = new Uint8Array(maxBars);
+    let count = 0;
+    let scroll = 0;
+    let smooth = 0;
+    let last = performance.now();
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      w = Math.max(10, Math.round(rect.width));
+      const dpr = Math.max(1, window.devicePixelRatio || 1); // HiDPI 不糊
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = w + "px";
+      canvas.style.height = height + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+
+    const sample = (): { v: number; silent: boolean } => {
+      const m = meterRef.current;
+      if (m) {
+        // RMS 响度:时域均方根,感知上稳定,不会频谱那样闪烁
+        m.analyser.getByteTimeDomainData(m.data as any);
+        const buf = m.data;
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) { const a = (buf[i] - 128) / 128; sum += a * a; }
+        const rms = Math.sqrt(sum / buf.length);
+        smooth = smooth * 0.8 + rms * 0.2; // EMA 二次平滑
+        const silent = smooth < 0.02;      // 静音门限:底噪画矮灰条
+        const n = Math.min(1, smooth / 0.18); // 灵敏度
+        return { v: minH + n * (maxH - minH), silent };
+      }
+      // 降级:无频谱(无权限/非安全上下文)时安静起伏的模拟包络
+      const t = performance.now() / 1000;
+      const a = Math.max(0.03, 0.14 + 0.12 * Math.sin(t * 1.7) + 0.08 * Math.sin(t * 2.9 + 1.3));
+      return { v: minH + Math.min(1, a) * (maxH - minH), silent: false };
+    };
+
+    const push = (v: number, silent: boolean) => {
+      for (let i = maxBars - 1; i > 0; i--) { heights[i] = heights[i - 1]; muteds[i] = muteds[i - 1]; }
+      heights[0] = v;
+      muteds[0] = silent ? 1 : 0;
+      if (count < maxBars) count++;
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, w, height);
+      const base = height / 2;
+      for (let i = 0; i < count; i++) {
+        const x = Math.round(w - barWidth - i * step - scroll);
+        if (x + barWidth < 0) continue;
+        const bh = Math.max(1, Math.round(heights[i]));
+        ctx.fillStyle = muteds[i] ? muted : color;
+        roundRect(ctx, x, Math.round(base - bh / 2), barWidth, bh, Math.min(barWidth / 2, 1.5));
+        ctx.fill();
+      }
+    };
+
+    const frame = (now: number) => {
+      let dt = now - last;
+      last = now;
+      if (dt > 100) dt = 100; // 标签页隐藏后回来不产生追帧跳变
+      scroll += (step / intervalMs) * dt;
+      while (scroll >= step) { const s = sample(); push(s.v, s.silent); scroll -= step; }
+      draw();
+      raf = requestAnimationFrame(frame);
+    };
+
+    if (reduced) {
+      count = Math.min(maxBars, Math.ceil(w / step));
+      for (let i = 0; i < count; i++) { heights[i] = minH; muteds[i] = 1; }
+      draw();
+    } else {
+      raf = requestAnimationFrame(frame);
+    }
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [meterRef, height, barWidth, gap, minH, maxH, intervalMs, color, muted]);
+
+  return <canvas ref={canvasRef} style={{ display: "block", width: "100%", height, flex: 1, minWidth: 0 }} />;
+}
+
+// ─── 听写条(听写态占据输入框内部:灰色滚动声纹铺满整行、上下居中;计时叠加右端淡出) ──
 export function RecordingBar({ elapsed, sessionText = "", interim, meterRef, compact = false }: {
   elapsed: number; sessionText?: string; interim?: string; meterRef: React.MutableRefObject<AudioMeter | null>; compact?: boolean;
 }) {
@@ -227,7 +281,7 @@ export function RecordingBar({ elapsed, sessionText = "", interim, meterRef, com
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 1 : 3, minWidth: 0, flex: 1, justifyContent: "center" }}>
       <div style={{ position: "relative", display: "flex", alignItems: "center", minHeight: compact ? 20 : 30 }}>
-        <SpectrumBars meterRef={meterRef} count={compact ? 18 : 32} height={compact ? 11 : 14} barWidth={compact ? 2 : 2} />
+        <VoiceWaveform meterRef={meterRef} height={compact ? 14 : 22} barWidth={compact ? 2 : 3} gap={compact ? 2.5 : 3} minH={compact ? 2 : 3} maxH={compact ? 10 : 18} intervalMs={compact ? 80 : 70} />
         <span style={{
           position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
           fontSize: 12, color: "#64748b", fontWeight: 700, fontVariantNumeric: "tabular-nums",
