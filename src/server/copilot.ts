@@ -86,18 +86,27 @@ export function registerCopilot(server: ViteDevServer) {
     try {
       const { messages = [] } = JSON.parse((await readBody(req)) || "{}");
       res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Connection": "keep-alive" });
+      // 客户端断开（浏览器「停止生成」会 abort fetch）→ 中断上游 DeepSeek 流，停止计费
+      const abort = new AbortController();
+      let clientGone = false;
+      res.on("close", () => { clientGone = true; try { abort.abort(); } catch {} });
       const resp = await fetch(`${BASE}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
         body: JSON.stringify({ model: "deepseek-reasoner", messages, stream: true }),
+        signal: abort.signal,
       });
       if (!resp.ok || !resp.body) { res.end(`data: ${JSON.stringify({ error: `DeepSeek ${resp.status}` })}\n\n`); return; }
       const reader = (resp.body as any).getReader();
       const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(decoder.decode(value));
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done || clientGone) break;
+          res.write(decoder.decode(value));
+        }
+      } catch (e: any) {
+        if (!clientGone) throw e; // 客户端断开引起的 AbortError 是预期，静默
       }
       res.end();
     } catch (e: any) {
