@@ -164,7 +164,7 @@ function formatElapsed(s: number): string {
 // ─── 频谱声纹条(ChatGPT 式:真实音量/频率驱动,细圆角竖条随声音起伏) ───────────
 // 固定细条宽 + space-between 铺满整行;rAF 逐帧直改 transform(零重渲染);
 // meterRef 为空(无权限/非安全上下文)时降级为模拟错峰动画。
-export function SpectrumBars({ meterRef, count = 40, color = "#94a3b8", height = 28, barWidth = 3 }: {
+export function SpectrumBars({ meterRef, count = 32, color = "#94a3b8", height = 14, barWidth = 2 }: {
   meterRef: React.MutableRefObject<AudioMeter | null>; count?: number; color?: string; height?: number; barWidth?: number;
 }) {
   const wrapRef = useRef<HTMLSpanElement>(null);
@@ -173,7 +173,7 @@ export function SpectrumBars({ meterRef, count = 40, color = "#94a3b8", height =
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return; // 静态低条
     let raf = 0;
     const bars = Array.from(wrapRef.current?.children ?? []) as HTMLElement[];
-    const levels = new Array(count).fill(0.15);
+    const levels = new Array(count).fill(0.12);
     const t0 = performance.now();
     const loop = () => {
       const m = meterRef.current;
@@ -187,22 +187,22 @@ export function SpectrumBars({ meterRef, count = 40, color = "#94a3b8", height =
           const to = Math.max(from + 1, Math.floor((i + 1) * usable / count));
           let peak = 0;
           for (let j = from; j < to && j < bins.length; j++) if (bins[j] > peak) peak = bins[j];
-          const target = Math.min(1, (peak / 255) * 1.35); // 增益,说话更醒目
-          levels[i] += (target - levels[i]) * 0.35;
+          const target = Math.min(1, (peak / 255) * 1.15); // 克制增益,小幅起伏
+          levels[i] += (target - levels[i]) * 0.3;
         }
       } else {
         // 降级模拟:错峰正弦,安静地小幅度起伏
         const t = (performance.now() - t0) / 1000;
         for (let i = 0; i < count; i++) {
-          const v = 0.2 + 0.3 * (Math.sin(t * (2.1 + (i % 5) * 0.35) + i * 0.9) * 0.5 + 0.5);
+          const v = 0.15 + 0.22 * (Math.sin(t * (2.1 + (i % 5) * 0.35) + i * 0.9) * 0.5 + 0.5);
           levels[i] += (v - levels[i]) * 0.25;
         }
       }
       for (let i = 0; i < count; i++) {
         const bar = bars[i];
         if (!bar) continue;
-        bar.style.transform = `scaleY(${0.12 + levels[i] * 0.88})`;
-        bar.style.opacity = String(0.45 + levels[i] * 0.55);
+        bar.style.transform = `scaleY(${0.1 + levels[i] * 0.55})`;
+        bar.style.opacity = String(0.55 + levels[i] * 0.45);
       }
       raf = requestAnimationFrame(loop);
     };
@@ -226,8 +226,8 @@ export function RecordingBar({ elapsed, sessionText = "", interim, meterRef, com
   const hasText = !!(sessionText || interim);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 1 : 3, minWidth: 0, flex: 1, justifyContent: "center" }}>
-      <div style={{ position: "relative", display: "flex", alignItems: "center", minHeight: compact ? 20 : 36 }}>
-        <SpectrumBars meterRef={meterRef} count={compact ? 24 : 40} height={compact ? 16 : 28} barWidth={compact ? 2.5 : 3} />
+      <div style={{ position: "relative", display: "flex", alignItems: "center", minHeight: compact ? 20 : 30 }}>
+        <SpectrumBars meterRef={meterRef} count={compact ? 18 : 32} height={compact ? 11 : 14} barWidth={compact ? 2 : 2} />
         <span style={{
           position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
           fontSize: 12, color: "#64748b", fontWeight: 700, fontVariantNumeric: "tabular-nums",
