@@ -208,7 +208,7 @@ function ToolRow({ icon, tint, chipBg, label, onClick, badge, disabled }: { icon
 function BrandMark() {
   return (
     <div style={{ width: 30, height: 30, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <img src={xiaohaiLogo} alt="小海智能体" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+      <img src={xiaohaiLogo} alt="沪航者智能体" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
     </div>
   );
 }
@@ -296,7 +296,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
 
   const closeSearch = () => setSearchModalOpen(false);
   const paletteActions: CmdItem[] = [
-    { key: "new", icon: <PlusGlyph />, iconColor: "#1a5bc6", chipBg: "#e8f1ff", chipBorder: "#cfe0fb", label: "新建对话", desc: "开始一个新的小海对话", run: () => { onNewConversation(); closeSearch(); } },
+    { key: "new", icon: <PlusGlyph />, iconColor: "#1a5bc6", chipBg: "#e8f1ff", chipBorder: "#cfe0fb", label: "新建对话", desc: "开始一个新的沪航者对话", run: () => { onNewConversation(); closeSearch(); } },
   ];
   const paletteItems: CmdItem[] = list.map(c => ({
     key: c.id, icon: <ChatGlyph />, iconColor: "#64748b", chipBg: "#f1f5f9", chipBorder: "#e6ebf2",
@@ -310,7 +310,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
       actions={paletteActions}
       items={paletteItems}
       placeholder="搜索对话…"
-      title="小海 · 命令面板"
+      title="沪航者 · 命令面板"
       actionsLabel="新建"
       itemsLabel="最近对话"
       emptyCreateLabel="新建对话"
@@ -339,7 +339,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
           )}
         </div>
         {onEnterCompliance && (
-          <button onClick={onEnterCompliance} title="企业合规自查专家" style={{ width: 34, height: 34, borderRadius: 8, border: "1.5px solid #bfdbfe", background: "#eff6ff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#1a5bc6", fontSize: 14, fontWeight: 800 }}>合</button>
+          <button onClick={onEnterCompliance} title="企业ODI合规自查小助手" style={{ width: 34, height: 34, borderRadius: 8, border: "1.5px solid #bfdbfe", background: "#eff6ff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#1a5bc6", fontSize: 14, fontWeight: 800 }}>合</button>
         )}
         {searchModal}
       </div>
@@ -364,7 +364,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
         <div style={{ padding: "12px 12px 8px", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <BrandMark />
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#1f2937", flex: 1 }}>小海智能体</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1f2937", flex: 1 }}>沪航者智能体</span>
             <button
               onClick={() => setSearchModalOpen(true)}
               title="搜索对话 (⌘K)"
@@ -413,7 +413,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
             <div style={{ padding: "4px 0 0" }}>
               <ToolRow icon={<OdiFolderIcon />} tint="#6d28d9" chipBg="#f5f3ff" label="ODI备案助手" onClick={onEnterOdiWorkbench} />
               {onEnterCompliance && (
-                <ToolRow icon={<ShieldIcon />} tint="#1a5bc6" chipBg="#eff6ff" label="企业合规自查专家" onClick={onEnterCompliance} />
+                <ToolRow icon={<ShieldIcon />} tint="#1a5bc6" chipBg="#eff6ff" label="企业ODI合规自查小助手" onClick={onEnterCompliance} />
               )}
             </div>
           )}

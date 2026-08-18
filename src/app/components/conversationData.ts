@@ -15,7 +15,7 @@ export interface ConversationItem {
 
 export const CONVERSATIONS: ConversationItem[] = [
   { id: "c1", title: "三一集团海外业务情况", updatedAt: "刚刚", favorite: false, isOdiRelated: false, messages: [
-    { role: "user", text: "小海，帮我梳理一下三一集团目前的海外业务布局。" },
+    { role: "user", text: "沪航者，帮我梳理一下三一集团目前的海外业务布局。" },
     { role: "assistant", text: "根据公开信息，三一集团的海外业务主要分布在以下几个区域：\n\n1. **东南亚**：在印尼、越南、泰国设有制造基地，主要生产挖掘机、混凝土机械等工程机械。\n2. **印度**： Pune 工厂是三一在海外最大的制造基地之一。\n3. **美国**：在佐治亚州设有装配工厂，覆盖北美市场。\n4. **欧洲**：德国贝德堡设有研发与生产基地。\n5. **巴西/中东**：通过经销商网络覆盖。\n\n三一的国际化策略以\"绿地投资 + 本地化制造\"为主，建议您按区域逐个梳理合规要求。需要我针对某个具体国家深入分析吗？" },
   ]},
   { id: "c2", title: "新加坡设立子公司需要哪些手续", updatedAt: "10 分钟前", favorite: true, isOdiRelated: true, messages: [

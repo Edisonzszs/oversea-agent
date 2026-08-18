@@ -1,4 +1,4 @@
-// 小海通用对话界面 —— 展示历史消息 + 底部输入框 + DeepSeek 流式输出（think + content）。
+// 沪航者通用对话界面 —— 展示历史消息 + 底部输入框 + DeepSeek 流式输出（think + content）。
 // 空对话时展示欢迎页风格（banner + 快捷问题 + ChatInputBar），与原 WelcomeFrame 一致。
 
 import { useState, useRef, useEffect } from "react";
@@ -22,7 +22,7 @@ function RichText({ text }: { text: string }) {
 }
 import xiaohaiLogo from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
 
-const XIAOHAI_SYSTEM = "你是「小海」，上海走出去综合服务平台的 AI 智能助手。你的职责是帮助企业了解境外投资（ODI）相关政策、合规要求、操作流程，以及上海本地企业出海的综合服务。回答要简洁、准确、实用，适当使用列表和加粗。如果问题超出你的知识范围，如实告知并建议咨询专业机构或查阅官方原文。";
+const XIAOHAI_SYSTEM = "你是「沪航者」，上海出海综合服务平台的 AI 智能助手。你的职责是帮助企业了解境外投资（ODI）相关政策、合规要求、操作流程，以及上海本地企业出海的综合服务。回答要简洁、准确、实用，适当使用列表和加粗。如果问题超出你的知识范围，如实告知并建议咨询专业机构或查阅官方原文。";
 
 const QUICK_QUESTIONS = [
   "对外投资备案需要提交哪些材料？",
@@ -127,7 +127,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
         setMessages(finalMsgs);
         onMessagesChange(finalMsgs);
       } else {
-        const finalMsgs = [...newMsgs, { role: "assistant" as const, text: "抱歉，小海暂时无法回复，请稍后再试。" }];
+        const finalMsgs = [...newMsgs, { role: "assistant" as const, text: "抱歉，沪航者暂时无法回复，请稍后再试。" }];
         setMessages(finalMsgs);
         onMessagesChange(finalMsgs);
       }
@@ -160,9 +160,9 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
           {isEmpty && (
             <>
               <div style={{ background: "linear-gradient(135deg,#e8f9f0 0%,#d6eeff 100%)", borderRadius: 12, padding: "22px 28px", display: "flex", alignItems: "center", gap: 18, border: "1px solid rgba(26,91,198,0.08)" }}>
-                <img src={xiaohaiLogo} alt="小海" style={{ width: 68, height: 68, objectFit: "contain", flexShrink: 0 }} />
+                <img src={xiaohaiLogo} alt="沪航者" style={{ width: 68, height: 68, objectFit: "contain", flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 19, fontWeight: 600, color: "#1a2744", lineHeight: 1.5, marginBottom: 4 }}>您好，我是小海，欢迎来到上海市企业走出去综合服务平台</p>
+                  <p style={{ fontSize: 19, fontWeight: 600, color: "#1a2744", lineHeight: 1.5, marginBottom: 4 }}>您好，我是沪航者，欢迎来到上海市企业出海综合服务平台</p>
                   <p style={{ fontSize: 14, color: "#4a6490", lineHeight: 1.6 }}>可以为您解答出海政策、办事指南、ODI备案、国别风险等问题，请直接提问～</p>
                 </div>
               </div>
@@ -184,7 +184,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
           {/* 流式输出区 */}
           {loading && (
             <div style={{ display: "flex", gap: 10, margin: "10px 0", alignItems: "flex-start" }}>
-              <img src={xiaohaiLogo} alt="小海" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "contain", flexShrink: 0, marginTop: 2 }} />
+              <img src={xiaohaiLogo} alt="沪航者" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "contain", flexShrink: 0, marginTop: 2 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 {/* think 区 */}
                 {(thinkText || phase === "thinking") && (
@@ -196,7 +196,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
                     {thinkOpen && thinkText && (
                       <div style={{ background: "#f8fafc", borderRadius: 8, border: "1px solid #eef2f7", padding: "9px 13px", fontSize: 12.5, color: "#64748b", lineHeight: 1.7, whiteSpace: "pre-wrap", maxHeight: 300, overflowY: "auto", scrollbarWidth: "none" }}><RichText text={thinkText} /></div>
                     )}
-                    {phase === "thinking" && !thinkText && <div style={{ fontSize: 12.5, color: "#94a3b8", padding: "4px 0" }}>小海正在深度思考…</div>}
+                    {phase === "thinking" && !thinkText && <div style={{ fontSize: 12.5, color: "#94a3b8", padding: "4px 0" }}>沪航者正在深度思考…</div>}
                   </div>
                 )}
                 {/* answer 区 */}
@@ -255,7 +255,7 @@ function Bubble({ role, text, think }: { role: "user" | "assistant"; text: strin
   }
   return (
     <div style={{ display: "flex", gap: 10, margin: "10px 0", alignItems: "flex-start" }}>
-      <img src={xiaohaiLogo} alt="小海" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "contain", flexShrink: 0, marginTop: 2 }} />
+      <img src={xiaohaiLogo} alt="沪航者" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "contain", flexShrink: 0, marginTop: 2 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {think && <ThinkBlock text={think} />}
         <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937", whiteSpace: "pre-wrap" }}><RichText text={text} /></div>

@@ -140,7 +140,7 @@ function MaterialsPage({ project, onFiles, onAskAssistant }: {
                     <div style={{ display: "flex", gap: 6 }}>
                       <button style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 11, color: "#374151", cursor: "pointer" }}>预览</button>
                       <button onClick={() => onAskAssistant?.({ type: "material", projectId: project.id, projectName: project.name, materialId: m.id, materialName: m.name })}
-                        style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11, color: "#1a5bc6", cursor: "pointer" }}>问小海</button>
+                        style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11, color: "#1a5bc6", cursor: "pointer" }}>问沪航者</button>
                     </div>
                   </td>
                 </tr>
@@ -479,7 +479,7 @@ function ReviewPage({ project, validation, onLocate, onStartValidation, onAskAss
         {filtered.length > 0 && (
           <button onClick={() => onAskAssistant?.({ type: "project", projectId: project.id, projectName: project.name })}
             style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 12, color: "#1a5bc6", cursor: "pointer" }}>
-            问小海如何处理这些问题
+            问沪航者如何处理这些问题
           </button>
         )}
       </div>
@@ -507,7 +507,7 @@ function ReviewPage({ project, validation, onLocate, onStartValidation, onAskAss
                       style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #fde68a", background: "#fffbeb", fontSize: 11.5, color: "#92400e", cursor: "pointer", fontWeight: 600 }}>📄 原文出处</button>
                   )}
                   <button onClick={() => onAskAssistant?.({ type: "project", projectId: project.id, projectName: project.name })}
-                    style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11.5, color: "#1a5bc6", cursor: "pointer" }}>问小海如何处理</button>
+                    style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11.5, color: "#1a5bc6", cursor: "pointer" }}>问沪航者如何处理</button>
                 </div>
               </div>
             );
@@ -559,7 +559,7 @@ function GeneratePage({ project, onAskAssistant }: { project: AssistProject; onA
               <button disabled={!item.canGenerate} style={{ padding: "5px 14px", borderRadius: 7, border: "none", background: item.canGenerate ? "#1a5bc6" : "#f1f5f9", color: item.canGenerate ? "#fff" : "#9ca3af", fontSize: 12, cursor: item.canGenerate ? "pointer" : "default" }}>生成</button>
               <button disabled={!item.canGenerate} style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 12, color: item.canGenerate ? "#374151" : "#9ca3af", cursor: item.canGenerate ? "pointer" : "default" }}>下载</button>
               <button onClick={() => onAskAssistant?.({ type: "material", projectId: project.id, projectName: project.name, materialId: item.id, materialName: item.name })}
-                style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 12, color: "#1a5bc6", cursor: "pointer" }}>询问小海</button>
+                style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 12, color: "#1a5bc6", cursor: "pointer" }}>询问沪航者</button>
             </div>
           </div>
         );
@@ -878,7 +878,7 @@ function OverviewPage({ project, validation, onTab, onStartValidation, onAskAssi
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: todo.urgent ? "#dc2626" : "#f59e0b", flexShrink: 0, marginTop: 4 }} />
               <span style={{ fontSize: 12, color: "#374151", flex: 1, lineHeight: 1.5 }}>{todo.text}</span>
               <button onClick={() => onAskAssistant?.({ type: "issue", projectId: project.id, projectName: project.name, issueId: todo.issueId, issueName: todo.text, department: todo.dept })}
-                style={{ padding: "3px 9px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 10, color: "#1a5bc6", cursor: "pointer", flexShrink: 0 }}>问小海</button>
+                style={{ padding: "3px 9px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 10, color: "#1a5bc6", cursor: "pointer", flexShrink: 0 }}>问沪航者</button>
             </div>
           ))}
         </div>
@@ -994,7 +994,7 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => onAskAssistant?.({ type: "project", projectId: project.id, projectName: project.name })}
-              style={{ padding: "6px 16px", borderRadius: 8, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 13, color: "#1a5bc6", cursor: "pointer", fontWeight: 500 }}>问小海</button>
+              style={{ padding: "6px 16px", borderRadius: 8, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 13, color: "#1a5bc6", cursor: "pointer", fontWeight: 500 }}>问沪航者</button>
             <button onClick={onGoToList} style={{ padding: "6px 16px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", fontSize: 13, color: "#374151", cursor: "pointer" }}>返回工作台</button>
           </div>
         </div>

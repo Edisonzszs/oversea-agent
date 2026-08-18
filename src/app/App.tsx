@@ -129,7 +129,7 @@ export default function App() {
 
   // ── Navigation handlers ──
 
-  // 门户首页提交:携带问题落到小海新对话(自动发送),右侧展示该词的网站搜索结果
+  // 门户首页提交:携带问题落到沪航者新对话(自动发送),右侧展示该词的网站搜索结果
   const handlePortalSubmit = (question: string) => {
     setChatSeed({ q: question, nonce: Date.now() });
     setSearchKeyword(question);
@@ -205,7 +205,7 @@ export default function App() {
   };
 
   // ── Compliance handlers ──
-  // 进入「企业合规自查专家」:直接进合规项目空间(列表页)——版本选择在"新建项目"时弹。
+  // 进入「企业ODI合规自查小助手」:直接进合规项目空间(列表页)——版本选择在"新建项目"时弹。
   const handleEnterCompliance = () => {
     setMode("compliance");
     setActiveComplianceId(null);

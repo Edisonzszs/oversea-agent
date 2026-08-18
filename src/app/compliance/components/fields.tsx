@@ -50,7 +50,7 @@ function RichText({ text }: { text: string }) {
   return <>{parts.map((p, i) => p.startsWith("**") && p.endsWith("**") ? <b key={i}>{p.slice(2, -2)}</b> : <span key={i}>{p}</span>)}</>;
 }
 
-// 可复用的「问小海」图标按钮（行内字段用，尺寸较小）
+// 可复用的「问沪航者」图标按钮（行内字段用，尺寸较小）
 // 悬停：浮层直接显示该项预设解释（口径 / 各档含义 / 法规依据）；点击：推送到右侧伴填，可继续追问。
 function AskIcon({ question, label, size = 26 }: { question: string; label?: string; size?: number }) {
   const ask = useContext(CopilotAskContext);
@@ -68,7 +68,7 @@ function AskIcon({ question, label, size = 26 }: { question: string; label?: str
       <button onClick={() => {
         if (qa) { instantQA?.(qa.q, qa.a, qa.clauses); return; }
         if (ask) ask(question);
-      }} title={qa ? undefined : "让小海解释这一项"} aria-label="让小海解释这一项"
+      }} title={qa ? undefined : "让沪航者解释这一项"} aria-label="让沪航者解释这一项"
         style={{ width: size, height: size, border: "none", background: "transparent", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", color: C.primary, flexShrink: 0, transition: "opacity .15s", padding: 0, verticalAlign: "middle", opacity: 0.6 }}
         onMouseEnter={e => { e.currentTarget.style.opacity = "1"; }}
         onMouseLeave={e => { e.currentTarget.style.opacity = "0.6"; }}>

@@ -28,7 +28,7 @@ const RELATED: RelatedResult[] = [
   {
     id: "r1",
     title: "新加坡公司法关于外资设立要求",
-    org: "上海走出去综合服务平台 · 知识库",
+    org: "上海出海综合服务平台 · 知识库",
     snippet: "外资可 100% 持股，注册资本无最低限制，通常需 1 名本地董事与 1 名公司秘书。",
     tag: "平台知识库",
     tagColor: { color: "#6d5bd0", bg: "#f5f3ff" },

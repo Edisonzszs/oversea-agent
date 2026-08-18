@@ -1,4 +1,4 @@
-// 小海·合规伴填 —— 单一对话面板（合并原「伴填 / 法规伴答」两 tab）。
+// 沪航者·合规伴填 —— 单一对话面板（合并原「伴填 / 法规伴答」两 tab）。
 // 用户任意输入：模型自动判断是「描述投资安排→抽取可填字段」还是「提问字段含义/该填什么/法规」，
 // 或两者兼有。回复以聊天气泡呈现：通俗解释 + 引用精选条款 + 待确认字段卡。
 // 红线不变：抽取结果只是候选，只有用户点「确认填入」才写入表单。
@@ -33,7 +33,7 @@ type ChatMessage = {
   error?: string;
 };
 
-// 小海 avatar（渐变蓝圆 + 机器人 SVG）
+// 沪航者 avatar（渐变蓝圆 + 机器人 SVG）
 function XiaohaiAvatar({ size = 32 }: { size?: number }) {
   return (
     <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,#1a5bc6 0%,#3b82f6 100%)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -46,16 +46,16 @@ function XiaohaiAvatar({ size = 32 }: { size?: number }) {
   );
 }
 
-// 小海真实头像（首页同款 logo）
+// 沪航者真实头像（首页同款 logo）
 function XiaohaiLogo({ size = 32 }: { size?: number }) {
-  return <img src={xiaohaiLogo} alt="小海" style={{ width: size, height: size, objectFit: "contain", flexShrink: 0, display: "block" }} />;
+  return <img src={xiaohaiLogo} alt="沪航者" style={{ width: size, height: size, objectFit: "contain", flexShrink: 0, display: "block" }} />;
 }
 
 function greeting(): ChatMessage {
   return {
     id: "intro",
     role: "assistant",
-    text: "我是小海，合规伴填助手。\n说说您的投资安排，我帮您自动抽取可填字段（标注置信度与依据，确认后才写入）；遇到字段含义、该填什么、相关法规，也随时问我。",
+    text: "我是沪航者，合规伴填助手。\n说说您的投资安排，我帮您自动抽取可填字段（标注置信度与依据，确认后才写入）；遇到字段含义、该填什么、相关法规，也随时问我。",
   };
 }
 
@@ -80,7 +80,7 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
 
-  // 题目「问小海」一键种入输入框（用户可改可发）
+  // 题目「问沪航者」一键种入输入框（用户可改可发）
   useEffect(() => {
     if (seed) { setInput(seed); onSeedConsumed?.(); setTimeout(() => inputRef.current?.focus(), 0); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,7 +101,7 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
   if (collapsed) {
     // 收起态：右上角悬浮角标（Codex/MiniMax 风格），点回展开
     return (
-      <button onClick={onToggleCollapse} title="展开小海·合规伴填" aria-label="展开小海·合规伴填"
+      <button onClick={onToggleCollapse} title="展开沪航者·合规伴填" aria-label="展开沪航者·合规伴填"
         style={{ position: "absolute", top: 14, right: 14, zIndex: 30, width: 44, height: 44, borderRadius: 12, border: "1px solid #e6ecf4", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(15,23,42,0.12)", padding: 0, transition: "transform .15s ease, box-shadow .15s ease" }}
         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(26,91,198,0.20)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(15,23,42,0.12)"; }}>
         <XiaohaiLogo size={30} />
@@ -123,7 +123,7 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
       const { answer, candidates, clauses } = parseChatResponse(raw, getFieldsForStep(step, mode));
       setMessages(m => m.map(msg => msg.id === pid ? {
         ...msg, pending: false, text: answer, candidates, clauses,
-        error: (!answer && candidates.length === 0 && clauses.length === 0) ? "小海暂时没有识别到可填字段，也没能生成回答。可以补充更多描述，或换个问法试试。" : undefined,
+        error: (!answer && candidates.length === 0 && clauses.length === 0) ? "沪航者暂时没有识别到可填字段，也没能生成回答。可以补充更多描述，或换个问法试试。" : undefined,
       } : msg));
     } catch (e: any) {
       setMessages(m => m.map(msg => msg.id === pid ? { ...msg, pending: false, error: "伴填暂不可用：" + (e?.message || e) + "，可手动填写。" } : msg));
@@ -148,7 +148,7 @@ export function ComplianceCopilotPanel({ collapsed, onToggleCollapse, step, mode
       <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.lineSoft}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         <XiaohaiLogo size={32} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>小海·合规伴填</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>沪航者·合规伴填</div>
           <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>智能伴填 · 仅供参考</div>
         </div>
         <button onClick={onToggleCollapse} title="收起" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 16, padding: 4, borderRadius: 6 }}
@@ -208,7 +208,7 @@ function MessageView({ m, onConfirm, onDiscard }: { m: ChatMessage; onConfirm: (
   return (
     <div style={{ margin: "6px 10px" }}>
       <div style={{ minWidth: 0 }}>
-        {m.pending && <div style={bubbleStyle}>小海正在思考…</div>}
+        {m.pending && <div style={bubbleStyle}>沪航者正在思考…</div>}
         {m.error && <div style={{ ...bubbleStyle, color: C.bad, background: C.badBg, borderColor: C.badBorder }}>{m.error}</div>}
         {m.text && <div style={bubbleStyle}><RichText text={m.text} /></div>}
         {m.clauses && m.clauses.length > 0 && (

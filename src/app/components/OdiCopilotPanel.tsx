@@ -1,5 +1,5 @@
-// 小海·ODI 伴填 —— ODI 详情页右侧伴填面板(Step 2)。
-// 设计照搬合规 ComplianceCopilotPanel(360px 可收起聊天面板 + 小海头像 + 气泡 +
+// 沪航者·ODI 伴填 —— ODI 详情页右侧伴填面板(Step 2)。
+// 设计照搬合规 ComplianceCopilotPanel(360px 可收起聊天面板 + 沪航者头像 + 气泡 +
 // 引用条款 + 输入框 + 语音),内容换成 ODI 备案语境;走同一个 /api/copilot/chat。
 // 红线同合规:回答仅供参考,不编造事实/法规;字段级「候选→确认填入」是「进入后」能力,
 // 本版先只做问答 + 引用条款,候选卡待填报演示流程接入 ODI 字段目录后再开。
@@ -26,16 +26,16 @@ type ChatMessage = {
   error?: string;
 };
 
-// 小海真实头像(首页同款 logo)
+// 沪航者真实头像(首页同款 logo)
 function XiaohaiLogo({ size = 32 }: { size?: number }) {
-  return <img src={xiaohaiLogo} alt="小海" style={{ width: size, height: size, objectFit: "contain", flexShrink: 0, display: "block" }} />;
+  return <img src={xiaohaiLogo} alt="沪航者" style={{ width: size, height: size, objectFit: "contain", flexShrink: 0, display: "block" }} />;
 }
 
 function greeting(projectName?: string): ChatMessage {
   return {
     id: "intro",
     role: "assistant",
-    text: `我是小海,ODI 备案伴填助手。${projectName ? `当前项目:【${projectName}】。` : ""}
+    text: `我是沪航者,ODI 备案伴填助手。${projectName ? `当前项目:【${projectName}】。` : ""}
 说说您在 ODI 备案里遇到的问题——字段怎么填、填报口径、备案流程、所需材料、商务委/发改委差异,我帮您解答。
 (字段自动抽取与「确认填入」将在填报演示流程内开放。)`,
   };
@@ -44,7 +44,7 @@ function greeting(projectName?: string): ChatMessage {
 // ODI system prompt(通俗问答 + 参考依据;不编造逐字条文)
 function buildOdiPrompt(): string {
   return [
-    "你是「小海」,上海市企业走出去综合服务平台的 ODI(企业境外投资)备案伴填助手。",
+    "你是「沪航者」,上海市企业出海综合服务平台的 ODI(企业境外投资)备案伴填助手。",
     "用户正在进行 ODI 备案(商务主管部门 + 发改部门)相关操作。用通俗中文回答关于:填报口径(字段该填什么)、备案流程、所需材料、商务委与发改委要求差异、相关法规的问题。",
     "红线:不要编造事实、数字、金额或法规条文;不确定时如实说明并建议以主管部门官方要求为准。",
     "clauses 里的 point 是该法规/条款对此问题的【口径要点】,不是逐字条文;须标注法规名称(id),不得当作官方原文呈现,正式材料以官方原文为准。",
@@ -94,7 +94,7 @@ export function OdiCopilotPanel({ collapsed, onToggleCollapse, context }: Props)
 
   if (collapsed) {
     return (
-      <button onClick={onToggleCollapse} title="展开小海·ODI 伴填" aria-label="展开小海·ODI 伴填"
+      <button onClick={onToggleCollapse} title="展开沪航者·ODI 伴填" aria-label="展开沪航者·ODI 伴填"
         style={{ position: "absolute", top: 14, right: 14, zIndex: 30, width: 44, height: 44, borderRadius: 12, border: "1px solid #e6ecf4", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(15,23,42,0.12)", padding: 0, transition: "transform .15s ease, box-shadow .15s ease" }}
         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(26,91,198,0.20)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(15,23,42,0.12)"; }}>
         <XiaohaiLogo size={30} />
@@ -115,7 +115,7 @@ export function OdiCopilotPanel({ collapsed, onToggleCollapse, context }: Props)
       const { answer, clauses } = parseOdiResponse(raw);
       setMessages(m => m.map(msg => msg.id === pid ? {
         ...msg, pending: false, text: answer, clauses,
-        error: (!answer && clauses.length === 0) ? "小海暂时没能生成回答,可以补充更多细节,或换个问法试试。" : undefined,
+        error: (!answer && clauses.length === 0) ? "沪航者暂时没能生成回答,可以补充更多细节,或换个问法试试。" : undefined,
       } : msg));
     } catch (e: any) {
       setMessages(m => m.map(msg => msg.id === pid ? { ...msg, pending: false, error: "伴填暂不可用:" + (e?.message || e) + "。可稍后重试。" } : msg));
@@ -132,7 +132,7 @@ export function OdiCopilotPanel({ collapsed, onToggleCollapse, context }: Props)
       <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.lineSoft}`, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         <XiaohaiLogo size={32} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>小海·ODI 伴填</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>沪航者·ODI 伴填</div>
           <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>备案口径 · 流程 · 材料 · 仅供参考</div>
         </div>
         <button onClick={onToggleCollapse} title="收起" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 16, padding: 4, borderRadius: 6 }}
@@ -189,7 +189,7 @@ function MessageView({ m }: { m: ChatMessage }) {
   return (
     <div style={{ margin: "6px 10px" }}>
       <div style={{ minWidth: 0 }}>
-        {m.pending && <div style={bubbleStyle}>小海正在思考…</div>}
+        {m.pending && <div style={bubbleStyle}>沪航者正在思考…</div>}
         {m.error && <div style={{ ...bubbleStyle, color: C.bad, background: C.badBg, borderColor: C.badBorder }}>{m.error}</div>}
         {m.text && <div style={bubbleStyle}><RichText text={m.text} /></div>}
         {m.clauses && m.clauses.length > 0 && (

@@ -322,7 +322,7 @@ export function OdiProjectAssistantPanel({ collapsed, onToggleCollapse, context,
   const accent = isDemo ? "#d97706" : "#1a5bc6";
   const accentBg = isDemo ? "#fff7ed" : "#eff6ff";
   const accentBorder = isDemo ? "#fde68a" : "#bfdbfe";
-  const title = isDemo ? "小海·模拟教练" : "小海·项目助手";
+  const title = isDemo ? "沪航者·模拟教练" : "沪航者·项目助手";
   const disclaimer = isDemo
     ? "模拟教练不会修改您的模拟数据，仅解释字段关系和填报逻辑"
     : "项目助手不会直接修改正式材料字段，不可替代材料上传";
@@ -341,7 +341,7 @@ export function OdiProjectAssistantPanel({ collapsed, onToggleCollapse, context,
       >
         <XiaohaiAvatar size={30} demo={isDemo} />
         <div style={{ writingMode: "vertical-rl", fontSize: 11, color: "#64748b", letterSpacing: 1, fontWeight: 500 }}>
-          {isDemo ? "模拟教练" : "小海助手"}
+          {isDemo ? "模拟教练" : "沪航者助手"}
         </div>
         {(pendingCount != null && pendingCount > 0) && (
           <div style={{ background: "#dc2626", color: "#fff", borderRadius: 8, padding: "2px 6px", fontSize: 10, fontWeight: 700 }}>{pendingCount}</div>
@@ -426,7 +426,7 @@ export function OdiProjectAssistantPanel({ collapsed, onToggleCollapse, context,
         <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
           <textarea value={inputVal} onChange={e => setInputVal(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder={isDemo ? "向模拟教练提问…" : "向小海提问…"} rows={2}
+            placeholder={isDemo ? "向模拟教练提问…" : "向沪航者提问…"} rows={2}
             style={{ flex: 1, borderRadius: 8, border: `1px solid ${accentBorder}`, background: "#f8fafc", padding: "8px 10px", fontSize: 12, resize: "none", outline: "none", color: "#1f2937", fontFamily: "inherit", lineHeight: 1.5 }}
           />
           <button onClick={() => handleSend()} style={{ width: 34, height: 34, borderRadius: 8, border: "none", background: accent, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>

@@ -38,7 +38,7 @@ export function WelcomeFrame({ goTo, onOdiAssistClick }: Props) {
           <RobotAvatar size={68} />
           <div>
             <p style={{ fontSize: 19, fontWeight: 600, color: "#1a2744", lineHeight: 1.5, marginBottom: 4 }}>
-              您好，我是小海，欢迎来到上海市企业走出去综合服务平台
+              您好，我是沪航者，欢迎来到上海市企业出海综合服务平台
             </p>
             <p style={{ fontSize: 14, color: "#4a6490", lineHeight: 1.6 }}>
               可以为您解答出海政策、办事指南、ODI备案、国别风险等问题，请直接提问～
@@ -99,7 +99,7 @@ export function RobotAvatar({ size = 44 }: { size?: number }) {
     }}>
       <img
         src={xiaohaiRobotAvatarSrc}
-        alt="小海机器人头像"
+        alt="沪航者机器人头像"
         style={{
           width: "100%",
           height: "100%",

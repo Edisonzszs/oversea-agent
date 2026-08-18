@@ -44,7 +44,7 @@ const SITE_RESULTS: WebsiteResult[] = [
   },
   {
     id: "r4",
-    title: "企业走出去服务窗口联系方式一览",
+    title: "企业出海服务窗口联系方式一览",
     summary: "各区商务主管部门境外投资业务咨询电话、地址与工作时间，含市级综合服务热线。",
     channel: "服务指引",
     updatedAt: "2026-04-08",
@@ -113,7 +113,7 @@ export function WebsiteSearchPanel({ keyword = "" }: { keyword?: string }) {
           </p>
         </div>
         <p style={{ fontSize: 11, color: "#8698b6", marginTop: 8, marginBottom: 0 }}>
-          网站常规搜索结果 · 来自走出去平台 segg.sh.gov.cn
+          网站常规搜索结果 · 来自出海综合服务平台 segg.sh.gov.cn
         </p>
       </div>
 
@@ -185,7 +185,7 @@ function EmptyState() {
         暂无网站搜索结果
       </p>
       <p style={{ fontSize: 11, color: "#8698b6", lineHeight: "18px", margin: 0 }}>
-        从门户首页发起搜索，或在对话中让小海帮忙搜索网站
+        从门户首页发起搜索，或在对话中让沪航者帮忙搜索网站
       </p>
     </div>
   );

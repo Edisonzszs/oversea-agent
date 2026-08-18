@@ -31,7 +31,7 @@ export function PlatformTopBar({ authState, onLogin, onLogout }: Props) {
       {/* 第二栏：Logo + 全站登录状态（平台公共能力） */}
       <div style={{ height: 80, background: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0, borderBottom: "1px solid #e8e8e8" }}>
         <div style={{ display: "flex", alignItems: "center" }}>
-          <img src={logoImg} alt="上海市企业走出去综合服务平台" style={{ height: 48, objectFit: "contain", display: "block" }} />
+          <img src={logoImg} alt="上海市企业出海综合服务平台" style={{ height: 48, objectFit: "contain", display: "block" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {logged ? (

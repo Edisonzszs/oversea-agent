@@ -73,7 +73,7 @@ export function registerCopilot(server: ViteDevServer) {
       send(res, 200, { content });
     } catch (e: any) { send(res, 500, { error: String(e?.message || e) }); }
   });
-  // 小海通用对话（非 JSON，自由文本回复）
+  // 沪航者通用对话（非 JSON，自由文本回复）
   server.middlewares.use("/api/copilot/general", async (req: any, res: any) => {
     try {
       const { messages = [] } = JSON.parse((await readBody(req)) || "{}");
@@ -81,7 +81,7 @@ export function registerCopilot(server: ViteDevServer) {
       send(res, 200, { content });
     } catch (e: any) { send(res, 500, { error: String(e?.message || e) }); }
   });
-  // 小海流式对话（deepseek-reasoner，支持 think + content 流式输出）
+  // 沪航者流式对话（deepseek-reasoner，支持 think + content 流式输出）
   server.middlewares.use("/api/copilot/general-stream", async (req: any, res: any) => {
     try {
       const { messages = [] } = JSON.parse((await readBody(req)) || "{}");

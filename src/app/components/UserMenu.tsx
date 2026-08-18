@@ -150,7 +150,7 @@ function MemoryModal({ memories, onDelete, onClose }: { memories: { id: string; 
   return (
     <ModalShell title="记忆管理" onClose={onClose}>
       <p style={{ fontSize: 12.5, color: "#94a3b8", lineHeight: 1.6, marginBottom: 14 }}>
-        小海会记住您告诉它的企业信息和偏好，以便在后续对话中提供更准确的建议。您可以随时删除不需要的记忆。
+        沪航者会记住您告诉它的企业信息和偏好，以便在后续对话中提供更准确的建议。您可以随时删除不需要的记忆。
       </p>
       {memories.length === 0 ? (
         <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8", fontSize: 13 }}>暂无记忆条目</div>

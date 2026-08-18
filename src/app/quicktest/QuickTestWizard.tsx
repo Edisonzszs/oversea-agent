@@ -182,7 +182,7 @@ export function QuickTestWizard({ onUpgrade, onBackHome }: Props) {
           {step < 7 && <FeedbackFab right={384} />}
         </div>
 
-        {/* 右侧:小海·合规伴填(与完整版同一面板) */}
+        {/* 右侧:沪航者·合规伴填(与完整版同一面板) */}
         <ComplianceCopilotPanel
           collapsed={copilotCollapsed}
           onToggleCollapse={() => setCopilotCollapsed(v => !v)}

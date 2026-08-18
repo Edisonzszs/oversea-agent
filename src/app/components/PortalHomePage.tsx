@@ -3,12 +3,12 @@ import cleanBase from "../../imports/image-19.png";
 import xiaohaiBot from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
 
 /**
- * Portal_Home_Desktop —— 上海市企业走出去综合服务平台首页智能体入口。
+ * Portal_Home_Desktop —— 上海市企业出海综合服务平台首页智能体入口。
  * 迁移自 Figma 设计源码(出海智能体设计 (最新版) ( AI搜索-gpt)/HomePage.tsx),版式不变。
  *
  * image-19 为“干净官网底图”，作为真实背景资产直接使用：城市景观、平台 Logo、
  * 平台标题、SHANGHAI DESK 均来自底图，绝不重绘。其余元素均为叠加在底图之上的
- * 可编辑组件：顶部导航、登录辅助入口、左侧资讯卡、右侧浮动按钮、小海机器人、智能输入卡。
+ * 可编辑组件：顶部导航、登录辅助入口、左侧资讯卡、右侧浮动按钮、沪航者机器人、智能输入卡。
  * 只保留一条蓝色导航、一个平台 Logo/标题（均来自底图）。
  */
 
@@ -20,7 +20,7 @@ const NAV_ITEMS = [
 const HOT_QUESTIONS = ["企业出海扶持政策", "ODI备案材料", "新加坡的企业所得税率"];
 
 const WELCOME =
-  "您好，我是小海，欢迎来到上海市企业走出去综合服务平台。我可以为您提供出海政策咨询、办事指南、ODI 备案、国别税策等相关服务。您想咨询哪方面的问题？我将尽力为您解答。";
+  "您好，我是沪航者，欢迎来到上海市企业出海综合服务平台。我可以为您提供出海政策咨询、办事指南、ODI 备案、国别税策等相关服务。您想咨询哪方面的问题？我将尽力为您解答。";
 
 const PLACEHOLDER = "请输入您想了解的出海问题，例如：ODI 备案需要准备哪些材料？";
 
@@ -89,7 +89,7 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
       {/* ── 干净官网底图（真实背景资产，不重绘 Logo / 标题 / 城市景观） ── */}
       <img
         src={cleanBase}
-        alt="上海市企业走出去综合服务平台"
+        alt="上海市企业出海综合服务平台"
         style={{
           position: "absolute", inset: 0, width: "100%", height: "100%",
           objectFit: "cover", objectPosition: "center top",
@@ -114,17 +114,17 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
         ))}
       </div>
 
-      {/* ── 中央：小海机器人 + 智能输入卡 ── */}
+      {/* ── 中央：沪航者机器人 + 智能输入卡 ── */}
       <div
         style={{
           position: "absolute", left: "50%", bottom: "6%", transform: "translateX(-50%)",
           width: "clamp(820px, 52%, 1040px)", zIndex: 15,
         }}
       >
-        {/* 小海机器人：置于输入卡下层，仅头部从卡片后方露出 */}
+        {/* 沪航者机器人：置于输入卡下层，仅头部从卡片后方露出 */}
         <img
           src={xiaohaiBot}
-          alt="小海"
+          alt="沪航者"
           draggable={false}
           style={{
             position: "absolute", left: "82%", top: -84, transform: "translateX(-50%)",

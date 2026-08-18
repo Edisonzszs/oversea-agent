@@ -9,7 +9,7 @@ describe("OdiCopilotPanel (smoke)", () => {
     expect(typeof OdiCopilotPanel).toBe("function");
   });
 
-  it("renders the 小海·ODI 伴填 header + greeting + input in expanded mode", () => {
+  it("renders the 沪航者·ODI 伴填 header + greeting + input in expanded mode", () => {
     const html = stripSsrComments(
       renderToString(
         <OdiCopilotPanel
@@ -19,7 +19,7 @@ describe("OdiCopilotPanel (smoke)", () => {
         />
       )
     );
-    expect(html).toContain("小海·ODI 伴填");
+    expect(html).toContain("沪航者·ODI 伴填");
     expect(html).toContain("ODI 备案伴填助手");
     expect(html).toContain("越南新设项目");
     expect(html).toContain("Enter 发送");
@@ -32,7 +32,7 @@ describe("OdiCopilotPanel (smoke)", () => {
       renderToString(<OdiCopilotPanel collapsed onToggleCollapse={() => {}} />)
     );
     // 收起态:有展开按钮 title,不渲染输入区
-    expect(html).toContain("展开小海·ODI 伴填");
+    expect(html).toContain("展开沪航者·ODI 伴填");
     expect(html).not.toContain("Enter 发送");
   });
 });

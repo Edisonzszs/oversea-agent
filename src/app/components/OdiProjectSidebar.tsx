@@ -1,5 +1,5 @@
 // ODI 项目侧边栏 —— 对齐合规 ComplianceSidebar 视觉风格(首页 ConversationSidebar 调性):
-// 顶部工具栏(返回小海 + 标题 + 搜索⌘K + 折叠)、描边「新建 ODI 任务」、
+// 顶部工具栏(返回沪航者 + 标题 + 搜索⌘K + 折叠)、描边「新建 ODI 任务」、
 // 可折叠「任务分类 / 最近项目」分区、底部企业身份卡。
 // 已移除「已归档」模块(无此功能)。逻辑(视图切换 / 搜索 / 选中 / 计数)沿用旧版。
 
@@ -193,12 +193,12 @@ export function OdiProjectSidebar({ collapsed, onToggleCollapse, projects, activ
     <SearchCommandModal onClose={closeSearch} actions={paletteActions} items={paletteItems} placeholder="搜索项目…" title="ODI 备案助手" actionsLabel="新建" itemsLabel="最近项目" emptyCreateLabel="新建ODI任务" emptyCreateRun={() => { onNewProject(); closeSearch(); }} />
   ) : null;
 
-  // 折叠态:图标轨(首页风格,与合规侧栏一致:展开/返回小海/新建)
+  // 折叠态:图标轨(首页风格,与合规侧栏一致:展开/返回沪航者/新建)
   if (collapsed) {
     return (
       <div ref={sidebarRef} style={{ width: 56, flexShrink: 0, background: "#fbfcfe", borderRight: "1px solid #e5eaf2", display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 0", gap: 10, transition: `width ${DUR.layout}s ${CSS_EASE.inOut}` }}>
         <button onClick={onToggleCollapse} title="展开侧边栏" style={iconBtn}><CollapseIcon /></button>
-        <button onClick={onBackToXiaohai} title="返回小海" style={iconBtn}><BackIcon /></button>
+        <button onClick={onBackToXiaohai} title="返回沪航者" style={iconBtn}><BackIcon /></button>
         <button onClick={onNewProject} title="新建ODI任务" style={{ ...iconBtn, background: "#1a5bc6", border: "none" }}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" /></svg>
         </button>
@@ -211,10 +211,10 @@ export function OdiProjectSidebar({ collapsed, onToggleCollapse, projects, activ
     <div ref={sidebarRef} style={{ width: 264, flexShrink: 0, background: "#fbfcfe", borderRight: "1px solid #e5eaf2", display: "flex", flexDirection: "column", overflow: "hidden", transition: `width ${DUR.layout}s ${CSS_EASE.inOut}` }}>
       <div ref={contentRef} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
 
-        {/* 顶部工具栏(首页风格:[返回小海] [标题] [搜索⌘K] [收起]) */}
+        {/* 顶部工具栏(首页风格:[返回沪航者] [标题] [搜索⌘K] [收起]) */}
         <div style={{ padding: "12px 12px 8px", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={onBackToXiaohai} title="返回小海"
+            <button onClick={onBackToXiaohai} title="返回沪航者"
               style={{ width: 30, height: 30, borderRadius: 7, border: "1px solid #e5eaf2", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <BackIcon />
             </button>
