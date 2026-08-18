@@ -3,6 +3,7 @@ import cleanBase from "../../imports/portal-base.png";
 import seggLockup from "../../imports/segg-lockup.png";
 import xiaohaiBot from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
 import { SendUpGlyph } from "./BrandIcons";
+import { useVoiceInput, MicButton, DictationControls } from "./VoiceInput";
 
 /**
  * Portal_Home_Desktop —— 上海市企业出海综合服务平台首页智能体入口。
@@ -65,6 +66,9 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
   const [selectedHot, setSelectedHot] = useState<string | null>(null);
   const [closedCards, setClosedCards] = useState<number[]>([]);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const [interim, setInterim] = useState("");
+  // 语音听写(与聊天输入区同一套):识别文本 ✓确认 后追加进输入框
+  const voice = useVoiceInput(text => setValue(prev => prev ? prev + text : text), setInterim);
 
   const hasContent = value.trim().length > 0;
   // 默认展示欢迎语；点击 / 聚焦 / 有内容后进入输入态
@@ -184,10 +188,12 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
             )}
           </div>
 
-          {/* 下半部：热门问题（左） · 清除 + 发送（右） */}
+          {/* 下半部：热门问题（左） · 语音 + 清除 + 发送（右） */}
           <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 12, color: "#5a7196", marginBottom: 6 }}>热门问题</p>
+              <p style={{ fontSize: 12, color: "#5a7196", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {voice.listening && interim ? `正在识别：${interim}…` : "热门问题"}
+              </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {HOT_QUESTIONS.map((q) => {
                   const sel = selectedHot === q;
@@ -211,6 +217,11 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              {voice.listening ? (
+                <DictationControls size="md" onConfirm={voice.confirm} onCancel={voice.cancel} />
+              ) : (
+                <MicButton supported={voice.supported} onClick={voice.toggle} />
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); handleClear(); }}
                 disabled={!hasContent || submitting}
@@ -234,15 +245,15 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
                   width: 52, height: 52, border: "none", flexShrink: 0, background: "transparent", padding: 0,
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                   cursor: hasContent && !submitting ? "pointer" : "default",
-                  transition: "transform 0.15s",
+                  opacity: hasContent || submitting ? 1 : 0.45, // 恒蓝底,空值降透明度
+                  transition: "transform 0.15s, opacity 0.2s",
                 }}
                 onMouseDown={(e) => { if (hasContent && !submitting) e.currentTarget.style.transform = "scale(0.92)"; }}
                 onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
               >
                 {submitting ? <Spinner /> : (
-                  <SendUpGlyph size={52}
-                    color={hasContent ? "#1a5bc6" : "#c8d8ec"}
+                  <SendUpGlyph size={52} color="#1a5bc6"
                     style={hasContent ? { filter: "drop-shadow(0 4px 10px rgba(37,99,235,0.35))" } : undefined} />
                 )}
               </button>
