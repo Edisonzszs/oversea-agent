@@ -209,24 +209,27 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
         </div>
       </div>
 
-      {/* 底部输入（对齐 ChatGPT：录音态整个输入框切换为录音条；生成中发送钮变停止钮） */}
+      {/* 底部输入（对齐 ChatGPT/Claude/豆包：单行时提示文字/输入内容与麦克风/发送同处一条视觉中心线，
+          多行时输入区向上长高、按钮沉底；录音态整体切换为录音条；生成中发送钮变停止钮） */}
       <div style={{ flexShrink: 0, padding: "12px 0 0" }}>
         <div style={{
           background: voice.listening ? "#f4f8fe" : "#fff", borderRadius: 10,
           border: `1px solid ${voice.listening ? "#a9c9f2" : "#dde9f7"}`, boxShadow: "0 2px 8px rgba(26,64,140,0.06)",
-          display: "flex", alignItems: voice.listening ? "center" : "flex-end", padding: "10px 12px", gap: 8, minHeight: 56,
+          display: "flex", alignItems: voice.listening ? "center" : "flex-end", padding: "9px 12px", gap: 8, minHeight: 52,
           maxWidth: 820, margin: "0 auto", transition: "border-color .15s, background .15s",
         }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+          {/* 文本列:最小高=按钮高(34px)且内部垂直居中 → 单行时文字与右侧按钮中心线重合、无上下悬空留白;
+              多行时随 textarea 长高,容器 flex-end 让按钮沉底(ChatGPT 口径) */}
+          <div style={{ flex: 1, minWidth: 0, minHeight: 34, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             {voice.listening ? (
               <RecordingBar elapsed={voice.elapsed} sessionText={voice.sessionText} interim={interim} meterRef={voice.meterRef} />
             ) : (
               <>
                 <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                  placeholder="请输入您的问题，我会尽力为您解答...（按 Enter 发送，Shift + Enter 换行）"
-                  style={{ width: "100%", boxSizing: "border-box", border: "none", outline: "none", resize: "none", fontSize: 13, color: "#1a2744", background: "transparent", lineHeight: 1.6, fontFamily: "inherit", minHeight: 36, display: "block" }}
-                  rows={2} />
+                  placeholder="请输入您的问题…（Enter 发送，Shift+Enter 换行）"
+                  style={{ width: "100%", boxSizing: "border-box", border: "none", outline: "none", resize: "none", fontSize: 13, color: "#1a2744", background: "transparent", lineHeight: 1.6, fontFamily: "inherit", minHeight: 21, display: "block" }}
+                  rows={1} />
                 {interim && <div style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", lineHeight: 1.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>正在识别：{interim}…</div>}
               </>
             )}
