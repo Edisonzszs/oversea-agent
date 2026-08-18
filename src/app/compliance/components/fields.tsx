@@ -29,6 +29,14 @@ export const CopilotAskContext = createContext<((question: string) => void) | nu
 // 高风险过滤上下文：非 null 时，只渲染匹配高风险事项的 QuestionBlock / FormRow，其余隐藏。
 export const HighRiskFilterCtx = createContext<string[] | null>(null);
 
+// 高风险修改模式下隐藏"非题目"包装(模块导语/提示条/小节标题/文件区等)——只留命中的高风险题目。
+// 题目本体(QuestionBlock/FormRow)自行按 ctx 过滤;包装性内容包一层本组件即可。
+export function RiskHide({ children }: { children?: ReactNode }) {
+  const riskFilter = useContext(HighRiskFilterCtx);
+  if (riskFilter) return null;
+  return <>{children}</>;
+}
+
 // 预设问答上下文：点击 sparkle 后直接以 Q&A 对形式展示在右侧，不走 API。
 export const InstantQAContext = createContext<((q: string, a: string, clauses?: { id: string; quote: string }[]) => void) | null>(null);
 
@@ -211,6 +219,8 @@ export function FilesBlock({ title = "应准备文件（上传自愿 · 不作�
   onUpload: (fid: FileId, name: string) => void;
   onToggleMask: (fid: FileId) => void;
 }) {
+  const riskFilter = useContext(HighRiskFilterCtx);
+  if (riskFilter) return null; // 高风险修改模式只看问题项,文件区不显示
   return (
     <div style={{ background: "#F4F9F4", border: `1px solid #CFE3D2`, borderLeft: `4px solid ${C.ok}`, borderRadius: "0 8px 8px 0", padding: "10px 14px", margin: "10px 0 4px" }}>
       <div style={{ fontWeight: 700, color: C.ok, fontSize: 13, marginBottom: 6 }}>{title}</div>

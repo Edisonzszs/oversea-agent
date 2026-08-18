@@ -90,14 +90,6 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
     persist(next, r.grade, r.fileScore.score);
   };
 
-  const handleClearAnswers = () => {
-    const next = { ...createInitialState(), curStep: 1 };
-    stateRef.current = next;
-    setWorking(next);
-    setReport(null);
-    persist(next);
-  };
-
   const handleFixHighRisk = () => {
     if (!report || highRiskCount === 0) return;
     const modToStep: Record<string, number> = {
@@ -130,9 +122,6 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
           </div>
           <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>最近更新 {project.updatedAt}</div>
         </div>
-        {tab === "wizard" && (
-          <button onClick={() => { if (window.confirm("确定清空所有作答、重新开始？项目名称保留。")) handleClearAnswers(); }} title="清空全部作答数据" style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "transparent", color: C.bad, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>清空作答</button>
-        )}
         {/* 使用反馈问卷入口(页头行内;原右下 FAB 与底部导航重叠) */}
         <FeedbackFab />
         <div style={{ display: "flex", background: C.lineSoft, borderRadius: 8, padding: 3, gap: 2, flexShrink: 0 }}>

@@ -11,3 +11,8 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* 高风险修改模式:内容全部被过滤的分支/共通卡片(hr-card)自动隐藏(React null 子节点不产生 DOM,:empty 命中) */
+.hr-card:empty {
+  display: none;
+}

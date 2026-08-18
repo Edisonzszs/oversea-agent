@@ -2,7 +2,7 @@
 // 题干与选项忠实移植自合规 HTML 第五版表单；条件必答与字段显隐由 wizardModel 谓词驱动。
 
 import {
-  QuestionBlock, RadioQ, CheckQ, FormRow, TextInput, SelectInput, FilesBlock,
+  QuestionBlock, RadioQ, CheckQ, FormRow, TextInput, SelectInput, FilesBlock, RiskHide,
   type WizardApi,
 } from "./fields";
 import { C } from "../complianceTheme";
@@ -21,9 +21,11 @@ export function StepProfile({ api }: { api: WizardApi }) {
   const s = api.state;
   return (
     <>
-      <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>
-        本模块采集基础信息，用于匹配后续自查分支与提示内容，<b>不参与评价</b>。
-      </p>
+      <RiskHide>
+        <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>
+          本模块采集基础信息，用于匹配后续自查分支与提示内容，<b>不参与评价</b>。
+        </p>
+      </RiskHide>
 
       <FormRow label="企业名称/信用代码">
         <TextInput value={s.answers.single["p_name"] ?? ""} onChange={v => api.setSingle("p_name", v)} placeholder="（选填）" />
@@ -62,6 +64,7 @@ export function StepProfile({ api }: { api: WizardApi }) {
         </SelectInput>
       </FormRow>
 
+      <RiskHide>
       <FormRow label="是否采用特殊架构" />
       <CheckQ
         values={checkedVals(s, "p_arch")}
@@ -75,7 +78,9 @@ export function StepProfile({ api }: { api: WizardApi }) {
       <label style={{ display: "inline-block", marginTop: 8, fontSize: 13, cursor: "pointer", color: checkedVals(s, "p_arch").includes("none") ? C.primary : C.sub }}>
         <input type="checkbox" checked={checkedVals(s, "p_arch").includes("none")} onChange={() => api.toggleMulti("p_arch", "none")} style={{ marginRight: 6 }} />无
       </label>
+      </RiskHide>
 
+      <RiskHide>
       <h3 style={{ margin: "22px 0 6px", fontSize: 15, color: C.ink }}>投资方式（决定模块二自查分支）</h3>
       <p style={{ fontSize: 13, color: C.sub, marginBottom: 10 }}>选定后仅呈现对应方式的题目。</p>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -94,6 +99,7 @@ export function StepProfile({ api }: { api: WizardApi }) {
           );
         })}
       </div>
+      </RiskHide>
     </>
   );
 }
@@ -103,9 +109,11 @@ export function StepSubject({ api }: { api: WizardApi }) {
   const s = api.state;
   return (
     <>
-      <p style={noteStyle}>
-        本模块六项对应主管机关审查的六项主体资格子标准，其中第 <b>1、3、4</b> 项属"不予受理"前置门槛，务请重点对照。每题下方为"应准备文件"上传区（上传自愿 · 不作申报条件 · 可脱敏 · 上传即得分）。
-      </p>
+      <RiskHide>
+        <p style={noteStyle}>
+          本模块六项对应主管机关审查的六项主体资格子标准，其中第 <b>1、3、4</b> 项属"不予受理"前置门槛，务请重点对照。每题下方为"应准备文件"上传区（上传自愿 · 不作申报条件 · 可脱敏 · 上传即得分）。
+        </p>
+      </RiskHide>
       {Z_QUESTIONS.map(q => (
         <QuestionBlock key={q.name} stem={q.stem} law={q.law}>
           <RadioQ name={q.name} value={val(s, q.name)} options={q.opts} onChange={v => api.setSingle(q.name, v)} />
@@ -123,9 +131,11 @@ export function StepInvestMode({ api }: { api: WizardApi }) {
   return (
     <>
       {mode === "new" && (
-        <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
-          <h2 style={h3Title}>分支 A　新设类：资金使用必要性与合理性</h2>
-          <div style={noteStyle}><b>口径提示：</b>本分支仅适用于在境外设立新企业。对已获证境外企业的增资请改选"变更类"；通过增资认购他人既有公司新发行股份的请改选"并购类"。</div>
+        <div className="hr-card" style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
+          <RiskHide>
+            <h2 style={h3Title}>分支 A　新设类：资金使用必要性与合理性</h2>
+            <div style={noteStyle}><b>口径提示：</b>本分支仅适用于在境外设立新企业。对已获证境外企业的增资请改选"变更类"；通过增资认购他人既有公司新发行股份的请改选"并购类"。</div>
+          </RiskHide>
           <QuestionBlock stem="A-1　是否已编制成本测算表（以 1-3 年为一个用款周期、分科目列示）？">
             <RadioQ name="n1" value={val(s, "n1")} options={N1_OPTS} onChange={v => api.setSingle("n1", v)} />
             <FilesBlock fids={["f_n1"]} mode={mode} uploads={s.uploads} onUpload={api.uploadFile} onToggleMask={api.toggleMask} />
@@ -142,9 +152,11 @@ export function StepInvestMode({ api }: { api: WizardApi }) {
       )}
 
       {mode === "ma" && (
-        <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
-          <h2 style={h3Title}>分支 B　并购类：交易结构、标的真实性与定价公允性</h2>
-          <div style={noteStyle}><b>前置程序提示（商务部系统规则）：</b>设立方式为"并购"或"增资并购"的，必须先选择已填写或已通过的"并购事项前期报告表"（在系统"备案（核准）报告"应用中填报），方可继续填写境外投资申请表。请将前期报告纳入交易时间表。</div>
+        <div className="hr-card" style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
+          <RiskHide>
+            <h2 style={h3Title}>分支 B　并购类：交易结构、标的真实性与定价公允性</h2>
+            <div style={noteStyle}><b>前置程序提示（商务部系统规则）：</b>设立方式为"并购"或"增资并购"的，必须先选择已填写或已通过的"并购事项前期报告表"（在系统"备案（核准）报告"应用中填报），方可继续填写境外投资申请表。请将前期报告纳入交易时间表。</div>
+          </RiskHide>
           <QuestionBlock stem="B-1　本次交易完成后，属于以下哪种类型？">
             <RadioQ name="m0a" value={val(s, "m0a")} options={M0A_OPTS} onChange={v => api.setSingle("m0a", v)} />
           </QuestionBlock>
@@ -177,9 +189,11 @@ export function StepInvestMode({ api }: { api: WizardApi }) {
       )}
 
       {mode === "chg" && (
-        <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
-          <h2 style={h3Title}>分支 C　变更类：证书载明事项变化对照</h2>
-          <div style={noteStyle}><b>口径提示：</b>变更类针对已核准/备案项目，对照《企业境外投资证书》载明事项逐项核查变化。</div>
+        <div className="hr-card" style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
+          <RiskHide>
+            <h2 style={h3Title}>分支 C　变更类：证书载明事项变化对照</h2>
+            <div style={noteStyle}><b>口径提示：</b>变更类针对已核准/备案项目，对照《企业境外投资证书》载明事项逐项核查变化。</div>
+          </RiskHide>
           <QuestionBlock stem="C-1　对照证书载明事项，本项目发生了哪些变化（可多选）：">
             <CheckQ values={checkedVals(s, "c1")} options={C1_OPTS} noneValue="0" onToggle={v => api.toggleMulti("c1", v)} />
           </QuestionBlock>
@@ -213,8 +227,10 @@ export function StepInvestMode({ api }: { api: WizardApi }) {
       )}
 
       {/* 共通项 */}
-      <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
-        <h2 style={h3Title}>共通项（各分支均填）</h2>
+      <div className="hr-card" style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: "18px 20px", marginBottom: 16 }}>
+        <RiskHide>
+          <h2 style={h3Title}>共通项（各分支均填）</h2>
+        </RiskHide>
         <QuestionBlock stem="共通 1　项目团队行业经验：">
           <RadioQ name="g1" value={val(s, "g1")} options={G1_OPTS} onChange={v => api.setSingle("g1", v)} />
           <FilesBlock fids={["f_g1"]} mode={mode} uploads={s.uploads} onUpload={api.uploadFile} onToggleMask={api.toggleMask} />
@@ -243,7 +259,9 @@ export function StepTarget({ api }: { api: WizardApi }) {
   const mod3Fids = fileSet(mode).filter(f => FILE_MOD[f] === "模块三");
   return (
     <>
-      <div style={noteStyle}><b>审批填报预告（商务部系统官方填表说明）：</b>申请表中“投资路径”仅指第一层级境外企业（作为投资平台、不从事具体经营业务，可通过“+”增加多家）；“最终目的地境外企业”另行单独填报，注册资本应与其章程约定一致。请按“第一层级平台+最终目的地企业”两层口径梳理架构信息。</div>
+      <RiskHide>
+        <div style={noteStyle}><b>审批填报预告（商务部系统官方填表说明）：</b>申请表中“投资路径”仅指第一层级境外企业（作为投资平台、不从事具体经营业务，可通过“+”增加多家）；“最终目的地境外企业”另行单独填报，注册资本应与其章程约定一致。请按“第一层级平台+最终目的地企业”两层口径梳理架构信息。</div>
+      </RiskHide>
       {mode === "ma" && (
         <QuestionBlock stem="3.1-②　标的注册证明文件、股东名册、董事名册是否已取得？是否已备加盖公章的中文翻译件？" law="登记文件形式要件为审查环节统一要求（外文文件须附加盖公章的中文翻译件）；缺登记文件判档不得高于 C。">
           <RadioQ name="t2" value={val(s, "t2")} options={T2_OPTS} onChange={v => api.setSingle("t2", v)} />
@@ -284,7 +302,9 @@ export function StepSecurity({ api }: { api: WizardApi }) {
   const s1a = val(s, "s1a");
   return (
     <>
-      <p style={noteStyle}>安全审查是受理后的前置环节：主管机关受理申请后先进行安全审查，疑虑未消除的不予批准、不进入后续实质审查。本模块为事实采集与预警，不能替代主管机关安全审查。商务部备案系统在审批端同样设置四道敏感问答（一国以上利益/三项清单/石墨物项/稀土物项），本模块问答口径与商务部系统一致。</p>
+      <RiskHide>
+        <p style={noteStyle}>安全审查是受理后的前置环节：主管机关受理申请后先进行安全审查，疑虑未消除的不予批准、不进入后续实质审查。本模块为事实采集与预警，不能替代主管机关安全审查。商务部备案系统在审批端同样设置四道敏感问答（一国以上利益/三项清单/石墨物项/稀土物项），本模块问答口径与商务部系统一致。</p>
+      </RiskHide>
       <QuestionBlock stem="4-1a　本次投资或后续运营中，是否存在人员/技术跨境安排（跨境派遣技术人员、组织人员赴境外工作、跨境提供技术指导、安排人员跨境培训，或向境外提供技术图纸、工艺流程、软件源代码、数据集等）？" law="837 号令第十三条；第十五条（境外投资安全审查制度）；《出口管制法》《两用物项出口管制条例》；《中国禁止出口限制出口技术目录》。涉禁止出口内容为“一条红线”，不得实施；涉限制出口内容须先取得许可。">
         <RadioQ name="s1a" value={s1a} options={[{ v: "n", label: "均无" }, { v: "y", label: "有上述一项或多项安排" }]} onChange={v => api.setSingle("s1a", v)} />
       </QuestionBlock>
@@ -324,7 +344,9 @@ export function StepIndustryCountry({ api }: { api: WizardApi }) {
   const s = api.state;
   return (
     <>
-      <p style={noteStyle}>本模块采集行业与国别事实信息并即时输出提示，<b>不判档、不计文件分</b>。审批环节将按行业与国别要求提供更充分的资料论述，请提前准备。（行业与国别要点将持续完善扩充，提示内容以官方最新发布为准）</p>
+      <RiskHide>
+        <p style={noteStyle}>本模块采集行业与国别事实信息并即时输出提示，<b>不判档、不计文件分</b>。审批环节将按行业与国别要求提供更充分的资料论述，请提前准备。（行业与国别要点将持续完善扩充，提示内容以官方最新发布为准）</p>
+      </RiskHide>
       <FormRow label="行业细分（采集）">
         <TextInput value={s.answers.single["q51"] ?? ""} onChange={v => api.setSingle("q51", v)} placeholder="如：半导体集成电路制造" />
       </FormRow>
