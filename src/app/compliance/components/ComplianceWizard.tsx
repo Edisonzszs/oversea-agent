@@ -58,7 +58,11 @@ export function ComplianceWizard({ state, setState, onGenerated, onAskCopilot, o
         return { ...prev, uploads: { ...prev.uploads, [fid]: { name: u?.name ?? "", masked: !(u?.masked ?? false) } } };
       }),
     pickCountry: (ctry: string) => {
-      setState(prev => ({ ...prev, answers: { ...prev.answers, single: { ...prev.answers.single, p_ctry: ctry } }, ctryAck: ctry ? prev.ctryAck : null }));
+      // 换国别即作废旧确认(合规告知留痕须与实际国别一致);重选同一国别不重复作废
+      setState(prev => {
+        const changed = ctry !== prev.answers.single.p_ctry;
+        return { ...prev, answers: { ...prev.answers, single: { ...prev.answers.single, p_ctry: ctry } }, ctryAck: changed ? null : prev.ctryAck };
+      });
       if (ctry) setPendingCountry(ctry);
     },
   };
@@ -67,6 +71,18 @@ export function ComplianceWizard({ state, setState, onGenerated, onAskCopilot, o
     setState(prev => ({ ...prev, curStep: i, maxSeen: Math.max(prev.maxSeen, i) }));
     setError(null);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // 步进器前向跳步与「下一步」同口径:途经步骤逐一校验当前作答,
+  // 防止改投资方式清空分支作答后直接跳步绕过校验生成残缺报告
+  const jumpValidated = (i: number) => {
+    if (i > cur) {
+      for (let s = cur; s < i; s++) {
+        const err = validateStep(s, state);
+        if (err) { setError(err); return; }
+      }
+    }
+    goStep(i);
   };
 
   const handleNext = () => {
@@ -103,7 +119,7 @@ export function ComplianceWizard({ state, setState, onGenerated, onAskCopilot, o
           const isDone = st.key < cur || (st.key <= state.maxSeen && st.key !== cur);
           const clickable = st.key <= state.maxSeen;
           return (
-            <button key={st.key} disabled={!clickable} onClick={() => clickable && goStep(st.key)}
+            <button key={st.key} disabled={!clickable} onClick={() => clickable && jumpValidated(st.key)}
               style={{
                 flex: "1 1 92px", textAlign: "center", background: "#fff",
                 border: `1px solid ${isCur ? C.primary : C.line}`, borderRadius: 7, padding: "8px 4px",

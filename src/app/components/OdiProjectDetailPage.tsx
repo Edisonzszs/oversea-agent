@@ -16,6 +16,7 @@ import { RULE_EVIDENCE_REFS, defaultMaterialFor, hasEvidenceRefs } from "../odi/
 import { buildMaterialDocs, lineHitsValue, type DocCell, type MaterialDoc } from "../odi/doc/materialDocs";
 import { allFieldDefs } from "../odi/field/odiFieldCatalog";
 import type { OdiField, OdiMaterialKey } from "../odi/data/types";
+import { useEscapeClose } from "./useEscapeClose";
 
 type DetailTab = "overview" | "materials" | "review" | "generate";
 
@@ -66,10 +67,14 @@ function buildActivity(project: AssistProject): { icon: string; text: string; ti
 }
 
 // ── MaterialsPage ─────────────────────────────────────────
-function MaterialsPage({ project, onFiles, onAskAssistant }: {
+function MaterialsPage({ project, onFiles, onAskAssistant, onDelete, onPreview }: {
   project: AssistProject;
   onFiles: (files: FileList | File[]) => void;
   onAskAssistant?: (ctx: AssistantContext) => void;
+  /** 删除单份材料(校验中锁定):材料集变化 → 版本 +1 回「待校验」;删光 → 整体复位 */
+  onDelete: (id: string) => void;
+  /** 预览材料识别原文(按文件名匹配模拟文档) */
+  onPreview: (m: AssistMaterialFile) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locked = project.status === "材料校验中"; // 校验中锁定上传（流程文档 §7.5）
@@ -138,9 +143,15 @@ function MaterialsPage({ project, onFiles, onAskAssistant }: {
                   </td>
                   <td style={{ padding: "10px 14px" }}>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 11, color: "#374151", cursor: "pointer" }}>预览</button>
+                      <button onClick={() => onPreview(m)} title="查看识别原文"
+                        style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 11, color: "#374151", cursor: "pointer" }}>预览</button>
                       <button onClick={() => onAskAssistant?.({ type: "material", projectId: project.id, projectName: project.name, materialId: m.id, materialName: m.name })}
                         style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11, color: "#1a5bc6", cursor: "pointer" }}>问沪航者</button>
+                      <button
+                        onClick={() => { if (window.confirm(`确定删除「${m.name}」？删除后需重新上传并校验。`)) onDelete(m.id); }}
+                        disabled={locked}
+                        title={locked ? "校验进行中，暂锁定操作" : "删除该材料"}
+                        style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${locked ? "#e5eaf2" : "#f3c4c4"}`, background: locked ? "#f8fafc" : "#fef6f6", fontSize: 11, color: locked ? "#9ca3af" : "#b91c1c", cursor: locked ? "default" : "pointer" }}>删除</button>
                     </div>
                   </td>
                 </tr>
@@ -905,6 +916,7 @@ function OverviewPage({ project, validation, onTab, onStartValidation, onAskAssi
 export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, onAskAssistant }: Props) {
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
   const [locateCheck, setLocateCheck] = useState<ValidationCheck | null>(null);
+  const [previewMat, setPreviewMat] = useState<AssistMaterialFile | null>(null);
   const timersRef = useRef<number[]>([]);
   const cfg = PROJECT_STATUS_CONFIG[project.status];
 
@@ -938,9 +950,31 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.name, project.fieldPool, project.materials]);
 
-  // 卸载时清掉识别/校验的演示定时器
-  useEffect(() => () => { timersRef.current.forEach(t => window.clearTimeout(t)); }, []);
+  // 演示定时器【不】随卸载清理:校验/识别进行中返回列表或切换项目时,落库回调仍按项目 id
+  // 幂等执行(update 对已不存在的 id 是 no-op),避免项目永久卡死在「材料校验中/识别中」无出口。
   const later = (fn: () => void, ms: number) => { timersRef.current.push(window.setTimeout(fn, ms)); };
+
+  // 恢复入口:带着「材料校验中」状态进来的项目(历史死锁/中断遗留),挂载后续跑校验落库,
+  // 不再永久锁死上传与重新校验。
+  useEffect(() => {
+    if (project.status !== "材料校验中" || project.materials.length === 0) return;
+    const { failed, missing, passed } = validation.summaries.reduce(
+      (acc, s) => ({ failed: acc.failed + s.failed, missing: acc.missing + s.missing, passed: acc.passed + s.passed }),
+      { failed: 0, missing: 0, passed: 0 },
+    );
+    later(() => {
+      onUpdate({
+        status: statusAfterValidation(failed, missing),
+        mismatchCount: failed,
+        missingCount: missing,
+        passedCount: passed,
+        validatedAt: "刚刚",
+        validatedVersion: project.materialVersion,
+        materials: project.materials.map(m => (m.recog === "识别中" ? { ...m, recog: "已识别" as const } : m)),
+      });
+    }, 1600);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** 上传：追加了材料行 → 待校验；首传注入演示字段池；1.2s 后置为已识别（POC 演示，未接 OCR）。 */
   const handleFiles = (files: FileList | File[]) => {
@@ -989,6 +1023,24 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
     }, 1600);
   };
 
+  /** 删除单份材料(校验中锁定):删一份 → 版本+1 回「待校验」待重新校验;删光 → 整体复位回「待上传材料」并清识别字段池。 */
+  const handleDeleteMaterial = (id: string) => {
+    if (project.status === "材料校验中") return;
+    const next = project.materials.filter(m => m.id !== id);
+    if (next.length === 0) {
+      onUpdate({
+        materials: [], uploadedCount: 0, materialVersion: project.materialVersion + 1,
+        status: "待上传材料", fieldPool: undefined, contributionRows: undefined,
+        mismatchCount: 0, missingCount: 0, passedCount: 0, validatedAt: undefined, validatedVersion: undefined,
+      });
+    } else {
+      onUpdate({
+        materials: next, uploadedCount: next.length, materialVersion: project.materialVersion + 1,
+        status: "待校验",
+      });
+    }
+  };
+
   const TABS: { key: DetailTab; label: string }[] = [
     { key: "overview", label: "项目驾驶舱" },
     { key: "materials", label: "材料管理" },
@@ -1030,7 +1082,7 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
       {/* Content */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         {activeTab === "overview"   && <OverviewPage   project={project} validation={validation} onTab={setActiveTab} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
-        {activeTab === "materials"  && <MaterialsPage  project={project} onFiles={handleFiles} onAskAssistant={onAskAssistant} />}
+        {activeTab === "materials"  && <MaterialsPage  project={project} onFiles={handleFiles} onAskAssistant={onAskAssistant} onDelete={handleDeleteMaterial} onPreview={setPreviewMat} />}
         {activeTab === "review"     && <ReviewPage     project={project} validation={validation} onLocate={setLocateCheck} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
         {activeTab === "generate"   && <GeneratePage   project={project} onAskAssistant={onAskAssistant} />}
       </div>
@@ -1039,6 +1091,89 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
       {locateCheck && (
         <EvidenceDrawer check={locateCheck} docs={materialDocs} pool={project.fieldPool ?? []} onClose={() => setLocateCheck(null)} />
       )}
+
+      {/* 材料预览弹窗(识别原文) */}
+      {previewMat && (
+        <MaterialPreviewModal mat={previewMat} doc={materialDocs.find(d => d.material === materialKeyOf(previewMat.name))} onClose={() => setPreviewMat(null)} />
+      )}
+    </div>
+  );
+}
+
+// ── 材料预览:按文件名匹配模拟文档键(口径同 guessMaterialMeta 的关键词) ──────────
+function materialKeyOf(name: string): OdiMaterialKey | null {
+  if (/商务备案/.test(name)) return "商务备案表";
+  if (/备案|申请表/.test(name)) return "备案表";
+  if (/承诺书/.test(name)) return "承诺书";
+  if (/营业|执照/.test(name)) return "营业执照";
+  if (/审计|财务|资产负债|利润/.test(name)) return "审计报告";
+  if (/请示/.test(name)) return "请示";
+  if (/资金|存款|贷款/.test(name)) return "资金证明";
+  return null;
+}
+
+/** 材料预览弹窗:有匹配模拟文档 → 展示识别原文(表格/行文);无 → 存档占位说明 */
+function MaterialPreviewModal({ mat, doc, onClose }: { mat: AssistMaterialFile; doc?: MaterialDoc; onClose: () => void }) {
+  useEscapeClose(onClose);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.42)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: 660, maxWidth: "92vw", maxHeight: "82vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 44px rgba(15,23,42,0.22)" }}>
+        {/* 头部:文件名 + 元信息 */}
+        <div style={{ padding: "14px 18px 12px", borderBottom: "1px solid #e8edf5", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 14.5, fontWeight: 800, color: "#111827", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mat.name}</span>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 16, color: "#9ca3af", cursor: "pointer", padding: "0 2px" }}>✕</button>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", fontSize: 11 }}>
+            {[mat.type, mat.scope, `上传于 ${mat.uploadedAt}`, `识别 ${mat.recog}`].map((t, i) => (
+              <span key={i} style={{ padding: "2px 8px", borderRadius: 5, background: "#f8fafc", border: "1px solid #e8edf5", color: "#64748b" }}>{t}</span>
+            ))}
+          </div>
+        </div>
+        {/* 正文:识别原文 */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px 16px" }}>
+          {doc ? (
+            <>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "#1e40af", marginBottom: 8 }}>{doc.title}</div>
+              {doc.rows ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+                  {doc.colWidths && <colgroup>{doc.colWidths.map((w, ci) => <col key={ci} style={{ width: w }} />)}</colgroup>}
+                  <tbody>
+                    {doc.rows.map((row, ri) => (
+                      <tr key={ri}>
+                        {row.map((cell: DocCell, ci) => (
+                          <td key={ci} colSpan={cell.span} rowSpan={cell.rowSpan} style={{
+                            border: "1px solid #c3cddc", padding: "4px 8px", fontSize: 11.5, lineHeight: 1.6, verticalAlign: "top",
+                            fontWeight: cell.kind === "head" || cell.kind === "title" ? 700 : 400,
+                            color: cell.kind === "note" ? "#94a3b8" : "#334155",
+                            background: cell.kind === "label" || cell.kind === "head" ? "#f1f5f9" : "#fff",
+                            textAlign: cell.align === "center" ? "center" : cell.align === "right" ? "right" : "left",
+                            whiteSpace: "pre-wrap", wordBreak: "break-all",
+                          }}>
+                            {(cell.lines ?? (cell.text != null ? [cell.text] : [""])).map((l, li) => <div key={li}>{l}</div>)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ border: "1px solid #e8edf5", borderRadius: 8, background: "#fbfcfe", overflow: "hidden" }}>
+                  {doc.lines.map((l, i) => (
+                    <div key={i} style={{ padding: "4px 12px", fontSize: 12, lineHeight: 1.7, color: "#475569", borderBottom: i < doc.lines.length - 1 ? "1px solid #f1f5f9" : "none", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{l}</div>
+                  ))}
+                </div>
+              )}
+              <div style={{ marginTop: 10, fontSize: 10.5, color: "#94a3b8" }}>原文为 POC 模拟文档（按材料模板从字段池生成）；真实 OCR 接入后展示扫描原文。</div>
+            </>
+          ) : (
+            <div style={{ padding: "44px 16px", textAlign: "center", fontSize: 13, color: "#9ca3af", lineHeight: 1.8 }}>
+              该材料暂无对应识别原文<br />
+              <span style={{ fontSize: 11.5 }}>（POC 未接 OCR：非标准申报材料仅作存档展示，不参与校验）</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -41,6 +41,10 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
   const [highRiskSteps, setHighRiskSteps] = useState<number[]>([]);
   const [highRiskItems, setHighRiskItems] = useState<{ name: string; grade: string }[]>([]);
   const [showRecheck, setShowRecheck] = useState(false);
+  // 报告过期检测:生成报告时的作答快照签名;之后作答变化 → 报告 tab 顶部提示"上次结果,请重新生成"
+  const answersSig = (st: WizardState) => JSON.stringify({ a: st.answers, mode: st.mode, lsNone: st.lsNone });
+  const [genSig, setGenSig] = useState(initial.generated ? answersSig(initial) : "");
+  const reportStale = !!report && genSig !== "" && genSig !== answersSig(working);
   const highRiskCount = report?.items.filter(it => it.grade === "C" || it.grade === "D").length ?? 0;
   const stateRef = useRef(working);
   stateRef.current = working;
@@ -72,7 +76,7 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
     setMode: (m) => updateState(prev => ({ ...clearBranchAnswers(prev, prev.mode), mode: m })),
     setLsNone: (b) => updateState(prev => ({ ...prev, lsNone: b })),
     uploadFile: () => {}, toggleMask: () => {},
-    pickCountry: (ctry) => updateState(prev => ({ ...prev, answers: { ...prev.answers, single: { ...prev.answers.single, p_ctry: ctry } }, ctryAck: ctry ? prev.ctryAck : null })),
+    pickCountry: (ctry) => updateState(prev => ({ ...prev, answers: { ...prev.answers, single: { ...prev.answers.single, p_ctry: ctry } }, ctryAck: ctry === prev.answers.single.p_ctry ? prev.ctryAck : null })),
   };
 
   const persist = (st: WizardState, grade?: string, score?: number) => {
@@ -98,6 +102,7 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
     const r = buildReport(next);
     setWorking(next);
     setReport(r);
+    setGenSig(answersSig(next));
     setTab("report");
     persist(next, r.grade, r.fileScore.score);
   };
@@ -152,6 +157,13 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
           {tab === "report" && (
             report
               ? <>
+                  {reportStale && (
+                    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 28px 0" }}>
+                      <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderLeft: "4px solid #ea580c", borderRadius: "0 8px 8px 0", padding: "10px 14px", fontSize: 13, color: "#92400e", lineHeight: 1.6 }}>
+                        ⚠ 作答已在生成报告后修改——以下为<b>上次生成结果</b>，请回到「自查向导」完成修改后重新生成报告。
+                      </div>
+                    </div>
+                  )}
                   <ComplianceReport report={report} projectName={project.name} />
                   {/* 完成面板 */}
                   <div style={{ maxWidth: 1080, margin: "0 auto", padding: "28px 28px 48px" }}>

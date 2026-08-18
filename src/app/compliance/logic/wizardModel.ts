@@ -104,6 +104,7 @@ export function validateStep(step: number, s: WizardState): string | null {
     if (!s.mode) return "请选择投资方式（新设类 / 并购类 / 变更类）";
     const cv = val(s, "p_ctry");
     if (cv && !s.ctryAck) return "请先阅读并知悉《对外投资提示事项》国别提示";
+    if (cv && s.ctryAck && s.ctryAck.ctry !== cv) return "目的地国别已变更，请重新阅读并确认《对外投资提示事项》";
     return null;
   }
 
