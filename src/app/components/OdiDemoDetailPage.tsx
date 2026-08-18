@@ -6,6 +6,7 @@ import { emptyField, type OdiField } from "../odi/data/types";
 import { applyLinkage, commitField, computeDerived } from "../odi/field/odiGuideLogic";
 import { type ValidationCheck, type ValidationResult } from "../odi/validation/odiValidationEngine";
 import { validateOdiFull } from "../odi/validation/odiNdrcRules";
+import { genOdiFormBlob, genCommitmentLetterBlob, genFeasibilityReportBlob } from "../odi/doc/documentGenerator";
 
 type Tab = "overview" | "form" | "verify" | "result";
 type Scene = "新设独资" | "并购" | "增资变更";
@@ -272,13 +273,18 @@ function ChangeCase({ c, editable, onEdit, onCommit }: {
 }
 
 // ── FormTab — case experience ─────────────────────────────
-function FormTab({ scene, overrides, onCommit }: {
+function FormTab({ scene, overrides, onCommit, onStep, onComplete }: {
   scene: Scene; overrides: Record<string, string>; onCommit: (key: string, value: string) => void;
+  /** 步进回调:进入第 i 步,回写项目进度 */
+  onStep?: (i: number) => void;
+  /** 第 3 步「完成填报并生成参考稿」 */
+  onComplete?: () => void;
 }) {
   const [step, setStep] = useState(0); // 0=项目方案 1=投资结构 2=项目说明
   const [editable, setEditable] = useState<string | null>(null);
   const stepLabels = ["项目方案", "投资结构与资金", "项目说明"];
   const c: CaseData = { ...CASE_DATA[scene], ...overrides };
+  const goto = (i: number) => { setStep(i); onStep?.(i); };
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
@@ -357,8 +363,12 @@ function FormTab({ scene, overrides, onCommit }: {
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24, paddingTop: 16, borderTop: "1px solid #f1f5f9" }}>
-          <button disabled={step === 0} onClick={() => setStep(s => s - 1)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid #e5eaf2", background: step === 0 ? "#f8fafc" : "#fff", fontSize: 13, color: step === 0 ? "#9ca3af" : "#374151", cursor: step === 0 ? "default" : "pointer" }}>上一步</button>
-          <button disabled={step === 2} onClick={() => setStep(s => s + 1)} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: step === 2 ? "#f1f5f9" : "#d97706", fontSize: 13, fontWeight: 600, color: step === 2 ? "#9ca3af" : "#fff", cursor: step === 2 ? "default" : "pointer" }}>下一步</button>
+          <button disabled={step === 0} onClick={() => goto(step - 1)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid #e5eaf2", background: step === 0 ? "#f8fafc" : "#fff", fontSize: 13, color: step === 0 ? "#9ca3af" : "#374151", cursor: step === 0 ? "default" : "pointer" }}>上一步</button>
+          {step < 2 ? (
+            <button onClick={() => goto(step + 1)} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#d97706", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer" }}>下一步</button>
+          ) : (
+            <button onClick={() => onComplete?.()} style={{ padding: "8px 24px", borderRadius: 8, border: "none", background: "#d97706", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", boxShadow: "0 2px 10px rgba(217,119,6,0.3)" }}>完成填报并生成参考稿 →</button>
+          )}
         </div>
       </div>
     </div>
@@ -483,13 +493,19 @@ function VerifyTab({ result }: { result: ValidationResult }) {
 }
 
 // ── Result docs ───────────────────────────────────────────
+// 三份参考稿与生成器一一对应(0=备案申请表 1=可行性 2=承诺书),下载走真实 docx 生成
 const RESULT_DOCS = [
   { name: "对外投资备案申请表（模拟参考稿）", pages: 4, dept: "商务委" },
   { name: "可行性研究报告提纲（模拟参考稿）", pages: 12, dept: "发改委" },
-  { name: "境外投资协议要点清单（模拟参考稿）", pages: 3, dept: "通用" },
+  { name: "境外投资真实性承诺书（模拟参考稿）", pages: 3, dept: "商务委" },
 ];
 
-function ResultTab({ project }: { project: DemoProject }) {
+function ResultTab({ project, dlBusy, onDownload, onLaunchAssist }: {
+  project: DemoProject;
+  dlBusy: number | null;
+  onDownload: (idx: number) => void;
+  onLaunchAssist?: () => void;
+}) {
   return (
     <div style={{ padding: "28px 32px" }}>
       <div style={{ background: "#f0f9ff", border: "1.5px solid #bae6fd", borderRadius: 12, padding: "12px 18px", marginBottom: 24, display: "flex", gap: 10 }}>
@@ -527,7 +543,8 @@ function ResultTab({ project }: { project: DemoProject }) {
                     <span style={{ fontSize: 11, padding: "0 6px", borderRadius: 4, background: "#fef3c7", color: "#92400e", fontWeight: 600 }}>含模拟水印</span>
                   </div>
                 </div>
-                <button style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 12, color: "#374151", cursor: "pointer", flexShrink: 0 }}>预览</button>
+                <button onClick={() => onDownload(i)} disabled={dlBusy === i}
+                  style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 12, color: dlBusy === i ? "#9ca3af" : "#374151", cursor: dlBusy === i ? "default" : "pointer", flexShrink: 0 }}>{dlBusy === i ? "生成中…" : "下载 .docx"}</button>
               </div>
             ))}
           </div>
@@ -536,10 +553,10 @@ function ResultTab({ project }: { project: DemoProject }) {
           <div style={{ marginTop: 24, background: "linear-gradient(135deg,#eff6ff 0%,#fff7ed 100%)", border: "1.5px solid #bfdbfe", borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#1e40af", marginBottom: 4 }}>已完成模拟体验</div>
-              <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>可基于本次模拟体验发起正式申报助办任务，系统将引用模拟数据作为初始值。<br/>
-              <span style={{ color: "#9ca3af" }}>模拟填报和申报助办的数据相互独立，模拟内容不会进入正式项目。</span></div>
+              <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>可基于本次体验发起正式的申报助办任务——上传真实项目材料，走识别、校验与材料生成全流程。<br/>
+              <span style={{ color: "#9ca3af" }}>模拟填报和申报助办的数据相互独立，模拟内容不会带入正式项目。</span></div>
             </div>
-            <button style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: "#1a5bc6", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>发起正式申报</button>
+            <button onClick={() => onLaunchAssist?.()} style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: "#1a5bc6", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>发起正式申报</button>
           </div>
         </>
       )}
@@ -725,9 +742,16 @@ function OverviewTab({ project, checkCount, onChangeTab }: { project: DemoProjec
 }
 
 // ── Main ──────────────────────────────────────────────────
-interface Props { project: DemoProject; onBack: () => void; }
+interface Props {
+  project: DemoProject;
+  onBack: () => void;
+  /** 项目状态回写(完成填报/步进进度),与助办侧同一函数式 patch 口径 */
+  onUpdate?: (patch: Partial<DemoProject> | ((p: DemoProject) => Partial<DemoProject>)) => void;
+  /** 「发起正式申报」:基于本次体验新建申报助办任务(模拟数据不带入) */
+  onLaunchAssist?: () => void;
+}
 
-export function OdiDemoDetailPage({ project, onBack }: Props) {
+export function OdiDemoDetailPage({ project, onBack, onUpdate, onLaunchAssist }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   // P1:案例字段编辑(overrides)回写字段池,经 联动/派生 后供校验实时计算
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -738,6 +762,48 @@ export function OdiDemoDetailPage({ project, onBack }: Props) {
   const evaluatedCount = verifyResult.checks.filter(c => c.status !== "未触发").length;
   const handleCommit = (key: string, value: string) => {
     setOverrides(prev => (prev[key] === value ? prev : { ...prev, [key]: value }));
+  };
+
+  // ── 完成出口:第 3 步「完成填报」→ 状态/进度/产物落库并切到结果页 ──
+  const warningCount = verifyResult.checks.filter(c => c.status === "不通过" || c.status === "缺失").length;
+  const handleDemoComplete = () => {
+    onUpdate?.({
+      currentStep: 3,
+      stepStatuses: ["completed", "completed", "completed", "completed"],
+      status: "已生成",
+      generatedCount: RESULT_DOCS.length,
+      warningCount,
+    });
+    changeTab("result");
+  };
+  // 步进:进入第 i 步 → 此前各步标记 completed(currentStep 取最大)
+  const handleFormStep = (i: number) => {
+    onUpdate?.(p => ({
+      currentStep: Math.max(p.currentStep, i),
+      stepStatuses: p.stepStatuses.map((s, idx) => (idx < i && s !== "completed" ? "completed" as const : s)),
+    }));
+  };
+  // 结果页参考稿下载:真实 docx 生成器(案例池 → Blob),与正式助办同一套生成逻辑
+  const [docDlBusy, setDocDlBusy] = useState<number | null>(null);
+  const handleDownloadDoc = async (idx: number) => {
+    const gens = [genOdiFormBlob, genFeasibilityReportBlob, genCommitmentLetterBlob];
+    const gen = gens[idx];
+    if (!gen || docDlBusy != null) return;
+    setDocDlBusy(idx);
+    try {
+      const pool = applyLinkage(computeDerived(caseToPool(project.scene as Scene, overrides)));
+      const blob = await gen(pool);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${RESULT_DOCS[idx].name}.docx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      window.alert(`下载失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setDocDlBusy(null);
+    }
   };
   const tabBarRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -796,9 +862,9 @@ export function OdiDemoDetailPage({ project, onBack }: Props) {
       {/* Content */}
       <div ref={contentRef} style={{ flex: 1, overflowY: "auto" }}>
         {activeTab === "overview" && <OverviewTab project={project} checkCount={evaluatedCount} onChangeTab={changeTab} />}
-        {activeTab === "form"     && <FormTab scene={project.scene as Scene} overrides={overrides} onCommit={handleCommit} />}
+        {activeTab === "form"     && <FormTab scene={project.scene as Scene} overrides={overrides} onCommit={handleCommit} onStep={handleFormStep} onComplete={handleDemoComplete} />}
         {activeTab === "verify"   && <VerifyTab result={verifyResult} />}
-        {activeTab === "result"   && <ResultTab project={project} />}
+        {activeTab === "result"   && <ResultTab project={project} dlBusy={docDlBusy} onDownload={handleDownloadDoc} onLaunchAssist={onLaunchAssist} />}
       </div>
     </div>
   );

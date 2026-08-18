@@ -17,9 +17,11 @@ interface Props {
   onInstantQA?: (q: string, a: string, clauses?: { id: string; quote: string }[]) => void;
   highRiskSteps?: number[];
   highRiskItems?: { name: string; grade: string }[];
+  /** 退出"只看高风险"过滤,回到全量题目 */
+  onExitHighRisk?: () => void;
 }
 
-export function ComplianceWizard({ state, setState, onGenerated, onAskCopilot, onInstantQA, highRiskSteps, highRiskItems }: Props) {
+export function ComplianceWizard({ state, setState, onGenerated, onAskCopilot, onInstantQA, highRiskSteps, highRiskItems, onExitHighRisk }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pendingCountry, setPendingCountry] = useState<string | null>(null);
 
@@ -101,7 +103,13 @@ export function ComplianceWizard({ state, setState, onGenerated, onAskCopilot, o
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "22px 28px 64px" }}>
       {highRiskItems && highRiskItems.length > 0 && (
         <div style={{ background: "#FFF9EC", border: `1px solid #EAD9A8`, borderLeft: `4px solid ${C.warn}`, borderRadius: "0 8px 8px 0", padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: "#6B5417", marginBottom: 6 }}>🎯 高风险修改模式 — 请优先检查以下 {highRiskItems.length} 项（步进器红点标注）</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#6B5417", flex: 1 }}>🎯 高风险修改模式 — 请优先检查以下 {highRiskItems.length} 项（步进器红点标注）</div>
+            {onExitHighRisk && (
+              <button onClick={onExitHighRisk} title="退出只看高风险,回到全量题目"
+                style={{ flexShrink: 0, background: "#fff", border: `1px solid ${C.warnBorder}`, color: "#92400e", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>退出只看高风险</button>
+            )}
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {highRiskItems.map((it, i) => (
               <span key={i} style={{ fontSize: 12, background: "#fff", border: `1px solid ${C.warnBorder}`, borderRadius: 6, padding: "3px 10px", color: C.ink, display: "inline-flex", alignItems: "center", gap: 5 }}>

@@ -14,6 +14,7 @@ import { getIssues, type ValidationCheck, type ValidationResult } from "../odi/v
 import { validateOdiFull } from "../odi/validation/odiNdrcRules";
 import { RULE_EVIDENCE_REFS, defaultMaterialFor, hasEvidenceRefs } from "../odi/validation/evidenceRefs";
 import { buildMaterialDocs, lineHitsValue, type DocCell, type MaterialDoc } from "../odi/doc/materialDocs";
+import { genOdiFormBlob, genCommitmentLetterBlob, genFeasibilityReportBlob } from "../odi/doc/documentGenerator";
 import { allFieldDefs } from "../odi/field/odiFieldCatalog";
 import type { OdiField, OdiMaterialKey } from "../odi/data/types";
 import { useEscapeClose } from "./useEscapeClose";
@@ -365,9 +366,12 @@ function hitLineIndexes(doc: MaterialDoc, value: string): number[] {
 }
 
 // ── ReviewPage — 材料校验中心 ─────────────────────────────
-function ReviewPage({ project, validation, onLocate, onStartValidation, onAskAssistant }: {
+function ReviewPage({ project, validation, resolvedChecks, resolvedKey, onToggleResolved, onLocate, onStartValidation, onAskAssistant }: {
   project: AssistProject;
   validation: ValidationResult;
+  resolvedChecks: ValidationCheck[];
+  resolvedKey: string;
+  onToggleResolved: (id: string) => void;
   onLocate: (check: ValidationCheck) => void;
   onStartValidation: () => void;
   onAskAssistant?: (ctx: AssistantContext) => void;
@@ -379,12 +383,14 @@ function ReviewPage({ project, validation, onLocate, onStartValidation, onAskAss
     locatable: hasEvidenceRefs(c.id), raw: c,
   }));
   const filtered = allIssues.filter(i => i.dept === activeDept);
+  const resolvedInDept = resolvedChecks.map(c => ({ id: c.id, dept: deptLabel(c.domain), field: c.field, status: c.status as string })).filter(i => i.dept === activeDept);
 
   const validating = project.status === "材料校验中";
   const noMaterials = project.materials.length === 0;
-  const versionUnchanged = project.validatedVersion === project.materialVersion; // 硬边界③：材料未变化不允许重复校验
+  // 硬边界③升级:材料版本未变 且 已处理集合与最近校验时一致 → 无需重复校验(标记/撤销处理可解锁重新校验)
+  const versionUnchanged = project.validatedVersion === project.materialVersion && (project.resolvedKeyAtValidation ?? "") === resolvedKey;
   const cannotRevalidate = validating || noMaterials || versionUnchanged;
-  const revalidateHint = validating ? "校验进行中" : noMaterials ? "请先上传材料" : versionUnchanged ? "材料未变化，无需重复校验" : "";
+  const revalidateHint = validating ? "校验进行中" : noMaterials ? "请先上传材料" : versionUnchanged ? "材料与问题处理均未变化，无需重复校验" : "";
 
   const deptResults = validation.summaries.map(s => ({
     dept: deptLabel(s.dept),
@@ -519,62 +525,146 @@ function ReviewPage({ project, validation, onLocate, onStartValidation, onAskAss
                   )}
                   <button onClick={() => onAskAssistant?.({ type: "project", projectId: project.id, projectName: project.name })}
                     style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11.5, color: "#1a5bc6", cursor: "pointer" }}>问沪航者如何处理</button>
+                  <button onClick={() => onToggleResolved(issue.id)} title="线下整改完成后标记,重新校验时不再计入"
+                    style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #bbf7d0", background: "#f0fdf4", fontSize: 11.5, color: "#15803d", cursor: "pointer", fontWeight: 600 }}>✓ 标记已处理</button>
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* 已标记处理的问题(重新校验不再计入;可撤销) */}
+      {resolvedInDept.length > 0 && (
+        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e8edf5", padding: "12px 18px", marginTop: 4 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#15803d", marginBottom: 8 }}>已标记处理 {resolvedInDept.length} 项（重新校验后不再计入）</div>
+          {resolvedInDept.map(i => (
+            <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", opacity: 0.75, borderTop: "1px dashed #f1f5f9" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0" }}>{i.status}</span>
+              <span style={{ fontSize: 12.5, color: "#475569", flex: 1, textDecoration: "line-through" }}>{i.field}</span>
+              <button onClick={() => onToggleResolved(i.id)} title="撤销后重新校验会再次计入"
+                style={{ padding: "3px 10px", borderRadius: 6, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 11, color: "#64748b", cursor: "pointer" }}>撤销</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-
-// ── GeneratePage ──────────────────────────────────────────
-const GENERATE_ITEMS = [
-  { id: "g1", name: "境外投资备案申请表（生成版）", dept: "商务委", fieldTotal: 24, fieldDone: 18, missing: 3, conflict: 1, canGenerate: false },
-  { id: "g2", name: "真实性承诺书", dept: "商务委", fieldTotal: 8, fieldDone: 8, missing: 0, conflict: 0, canGenerate: true },
-  { id: "g3", name: "项目情况说明", dept: "商务委", fieldTotal: 12, fieldDone: 9, missing: 2, conflict: 1, canGenerate: false },
-  { id: "g4", name: "资金来源说明函", dept: "商务委", fieldTotal: 6, fieldDone: 4, missing: 2, conflict: 0, canGenerate: false },
+// ── GeneratePage — 商务委材料生成（字段覆盖实算 + 真实 docx 产出）──────────
+// 三份稿对接 documentGenerator 真实生成器（OdiField[] → docx Blob）；
+// 生成条件 = 已识别字段池存在 且 无未处理校验问题；字段缺失处在稿内渲染"（待补充）"。
+const GEN_DOC_DEFS: { id: string; name: string; dept: string; fields: string[]; gen: (pool: OdiField[]) => Promise<Blob> }[] = [
+  {
+    id: "g_form", name: "境外投资备案申请表（生成版）", dept: "商务委",
+    fields: ["investment_country", "investment_method", "establishment_method", "overseas_registered_capital", "investment_total",
+      "domestic_company_name", "uscc", "overseas_company_cn", "direct_destination", "final_destination", "business_scope", "contact_name", "contact_phone"],
+    gen: genOdiFormBlob,
+  },
+  {
+    id: "g_commit", name: "境外投资真实性承诺书", dept: "商务委",
+    fields: ["domestic_company_name", "uscc", "project_name", "commitment_body", "establishment_method"],
+    gen: genCommitmentLetterBlob,
+  },
+  {
+    id: "g_feas", name: "项目情况说明（可行性参考稿）", dept: "商务委",
+    fields: ["project_name", "project_summary", "investment_total", "final_destination", "business_scope", "industry"],
+    gen: genFeasibilityReportBlob,
+  },
 ];
 
-function GeneratePage({ project, onAskAssistant }: { project: AssistProject; onAskAssistant?: (ctx: AssistantContext) => void }) {
+function GeneratePage({ project, adjIssueCount, docUrls, genBusy, onGenerate, onDownload, onPreview, onAskAssistant }: {
+  project: AssistProject;
+  adjIssueCount: number;
+  docUrls: Record<string, string>;
+  genBusy: string | null;
+  onGenerate: (id: string) => void;
+  onDownload: (id: string) => void;
+  onPreview: (def: (typeof GEN_DOC_DEFS)[number]) => void;
+  onAskAssistant?: (ctx: AssistantContext) => void;
+}) {
+  const pool = project.fieldPool ?? [];
+  const fieldLabel = (code: string) => allFieldDefs().find(d => d.code === code)?.name ?? code;
+  const poolVal = (code: string) => pool.find(f => f.code === code)?.value?.trim();
+  const noPool = pool.length === 0;
+  const hasUnresolved = adjIssueCount > 0;
   return (
     <div style={{ padding: "24px 44px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 16px", fontSize: 12, color: "#1e40af" }}>
-        以下材料由系统基于您上传的原始材料自动生成，请确认字段信息后下载使用。发改委材料生成不在本平台服务范围内。
+      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 16px", fontSize: 12, color: "#1e40af", lineHeight: 1.7 }}>
+        以下材料由系统基于已识别字段自动生成，生成前请确认校验问题均已处理。发改委材料生成不在本平台服务范围内。
+        {noPool && <><br />⚠ 尚未上传材料——上传并完成校验后可生成。</>}
+        {!noPool && hasUnresolved && <><br />⚠ 当前有 {adjIssueCount} 个未处理校验问题——处理并在校验中心标记后重新校验，即可生成。</>}
       </div>
-      {GENERATE_ITEMS.map(item => {
-        const pct = Math.round((item.fieldDone / item.fieldTotal) * 100);
-        const hasIssues = item.missing > 0 || item.conflict > 0;
+      {GEN_DOC_DEFS.map(def => {
+        const fieldTotal = def.fields.length;
+        const fieldDone = def.fields.filter(c => !!poolVal(c)).length;
+        const missing = fieldTotal - fieldDone;
+        const pct = fieldTotal ? Math.round((fieldDone / fieldTotal) * 100) : 0;
+        const generated = (project.generatedDocs ?? []).includes(def.id);
+        const canGenerate = !noPool && !hasUnresolved;
+        const hasDoc = !!docUrls[def.id] && generated;
         return (
-          <div key={item.id} style={{ background: "#fff", borderRadius: 12, border: "1px solid #e8edf5", padding: "18px 20px" }}>
+          <div key={def.id} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${generated ? "#bbf7d0" : "#e8edf5"}`, padding: "18px 20px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <div>
-                <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{item.name}</span>
-                <span style={{ marginLeft: 8, fontSize: 11, padding: "1px 7px", borderRadius: 5, background: "#eff6ff", color: "#1a5bc6", border: "1px solid #bfdbfe" }}>{item.dept}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{def.name}</span>
+                <span style={{ marginLeft: 8, fontSize: 11, padding: "1px 7px", borderRadius: 5, background: "#eff6ff", color: "#1a5bc6", border: "1px solid #bfdbfe" }}>{def.dept}</span>
+                {generated && <span style={{ marginLeft: 6, fontSize: 11, padding: "1px 7px", borderRadius: 5, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", fontWeight: 600 }}>已生成 ✓</span>}
               </div>
-              <span style={{ fontSize: 12, color: "#64748b" }}>{item.fieldDone}/{item.fieldTotal} 字段</span>
+              <span style={{ fontSize: 12, color: "#64748b" }}>{fieldDone}/{fieldTotal} 字段已识别</span>
             </div>
             <div style={{ height: 5, background: "#f1f5f9", borderRadius: 3, marginBottom: 10, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${pct}%`, background: pct === 100 ? "#16a34a" : "#1a5bc6", borderRadius: 3 }} />
+              <div style={{ height: "100%", width: pct + "%", background: pct === 100 ? "#16a34a" : "#1a5bc6", borderRadius: 3 }} />
             </div>
-            {hasIssues && (
-              <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
-                {item.missing > 0 && <span style={{ fontSize: 11, color: "#d97706" }}>缺失字段 {item.missing} 个</span>}
-                {item.conflict > 0 && <span style={{ fontSize: 11, color: "#dc2626" }}>冲突字段 {item.conflict} 个</span>}
-                {!item.canGenerate && <span style={{ fontSize: 11, color: "#9ca3af" }}>需先处理问题才可生成</span>}
+            {missing > 0 && (
+              <div style={{ fontSize: 11, color: "#92400e", marginBottom: 8 }}>
+                待补充字段 {missing} 个（{def.fields.filter(c => !poolVal(c)).map(fieldLabel).slice(0, 4).join("、")}{missing > 4 ? " 等" : ""}）——生成稿中将标注"（待补充）"
               </div>
             )}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 12, color: "#374151", cursor: "pointer" }}>预览</button>
-              <button disabled={!item.canGenerate} style={{ padding: "5px 14px", borderRadius: 7, border: "none", background: item.canGenerate ? "#1a5bc6" : "#f1f5f9", color: item.canGenerate ? "#fff" : "#9ca3af", fontSize: 12, cursor: item.canGenerate ? "pointer" : "default" }}>生成</button>
-              <button disabled={!item.canGenerate} style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 12, color: item.canGenerate ? "#374151" : "#9ca3af", cursor: item.canGenerate ? "pointer" : "default" }}>下载</button>
-              <button onClick={() => onAskAssistant?.({ type: "material", projectId: project.id, projectName: project.name, materialId: item.id, materialName: item.name })}
+              <button onClick={() => onPreview(def)} disabled={noPool}
+                style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 12, color: noPool ? "#9ca3af" : "#374151", cursor: noPool ? "default" : "pointer" }}>预览字段</button>
+              <button onClick={() => onGenerate(def.id)} disabled={!canGenerate || genBusy === def.id}
+                style={{ padding: "5px 14px", borderRadius: 7, border: "none", background: !canGenerate ? "#f1f5f9" : "#1a5bc6", color: !canGenerate ? "#9ca3af" : "#fff", fontSize: 12, fontWeight: 600, cursor: canGenerate && genBusy !== def.id ? "pointer" : "default" }}>
+                {genBusy === def.id ? "生成中…" : generated ? "重新生成" : "生成"}
+              </button>
+              <button onClick={() => onDownload(def.id)} disabled={!hasDoc}
+                style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 12, color: hasDoc ? "#374151" : "#9ca3af", cursor: hasDoc ? "pointer" : "default" }}>下载 .docx</button>
+              <button onClick={() => onAskAssistant?.({ type: "material", projectId: project.id, projectName: project.name, materialId: def.id, materialName: def.name })}
                 style={{ padding: "5px 14px", borderRadius: 7, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 12, color: "#1a5bc6", cursor: "pointer" }}>询问沪航者</button>
             </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** 生成稿字段灌入预览:字段 → 将写入值（缺失标"（待补充）"） */
+function GenDocPreviewModal({ def, pool, onClose }: { def: (typeof GEN_DOC_DEFS)[number]; pool: OdiField[]; onClose: () => void }) {
+  useEscapeClose(onClose);
+  const fieldLabel = (code: string) => allFieldDefs().find(d => d.code === code)?.name ?? code;
+  const poolVal = (code: string) => pool.find(f => f.code === code)?.value?.trim();
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.42)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: 560, maxWidth: "92vw", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 44px rgba(15,23,42,0.22)" }}>
+        <div style={{ padding: "14px 18px 12px", borderBottom: "1px solid #e8edf5", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: "#111827", flex: 1 }}>{def.name} — 字段灌入预览</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 16, color: "#9ca3af", cursor: "pointer", padding: "0 2px" }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px 16px" }}>
+          {def.fields.map(code => {
+            const v = poolVal(code);
+            return (
+              <div key={code} style={{ display: "flex", gap: 12, padding: "7px 0", borderBottom: "1px dashed #f1f5f9", fontSize: 12.5 }}>
+                <span style={{ flex: "0 0 150px", color: "#64748b" }}>{fieldLabel(code)}</span>
+                <span style={{ flex: 1, color: v ? "#1f2937" : "#d97706", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{v || "（待补充）"}</span>
+              </div>
+            );
+          })}
+          <div style={{ marginTop: 10, fontSize: 10.5, color: "#94a3b8" }}>生成稿为 docx 文档；缺失字段处以"（待补充）"占位，下载后可继续编辑。</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -917,6 +1007,10 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
   const [locateCheck, setLocateCheck] = useState<ValidationCheck | null>(null);
   const [previewMat, setPreviewMat] = useState<AssistMaterialFile | null>(null);
+  // 生成管理:docx Blob URL(生成后可反复下载) + 进行中标记 + 字段灌入预览
+  const [docUrls, setDocUrls] = useState<Record<string, string>>({});
+  const [genBusy, setGenBusy] = useState<string | null>(null);
+  const [previewGen, setPreviewGen] = useState<(typeof GEN_DOC_DEFS)[number] | null>(null);
   const timersRef = useRef<number[]>([]);
   const cfg = PROJECT_STATUS_CONFIG[project.status];
 
@@ -926,6 +1020,28 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
     () => validateOdiFull(project.fieldPool ?? [], { contributionRows: project.contributionRows }),
     [project.fieldPool, project.contributionRows],
   );
+
+  // ── 「标记已处理」闭环:用户线下整改后标记问题,重新校验不再计入(计入通过)。
+  // 材料增删 = 证据变化 → 标记清空重判。
+  const resolvedSet = useMemo(() => new Set(project.resolvedIssues ?? []), [project.resolvedIssues]);
+  const resolvedChecks = useMemo(() => getIssues(validation).filter(c => resolvedSet.has(c.id)), [validation, resolvedSet]);
+  const resolvedKey = useMemo(() => [...resolvedSet].sort().join(","), [resolvedSet]);
+  const adjValidation = useMemo(() => {
+    if (resolvedChecks.length === 0) return validation;
+    const checks = validation.checks.map(c => (resolvedSet.has(c.id) ? { ...c, status: "通过" as const } : c));
+    const summaries = validation.summaries.map(s => {
+      const rF = resolvedChecks.filter(c => c.domain === s.dept && c.status === "不通过").length;
+      const rM = resolvedChecks.filter(c => c.domain === s.dept && c.status === "缺失").length;
+      return { ...s, failed: s.failed - rF, missing: s.missing - rM, passed: s.passed + rF + rM };
+    });
+    return { ...validation, checks, summaries };
+  }, [validation, resolvedChecks, resolvedSet]);
+  const toggleResolved = (id: string) => {
+    onUpdate(p => {
+      const cur = p.resolvedIssues ?? [];
+      return { resolvedIssues: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] };
+    });
+  };
   // 材料模拟原文(证据定位用;POC 按字段池生成,OCR 接入后换真实文档行)
   const materialDocs = useMemo(
     () => buildMaterialDocs(project.fieldPool ?? [], project.contributionRows ?? []),
@@ -994,6 +1110,8 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
       uploadedCount: nextCount,
       materialVersion: project.materialVersion + 1,
       status: "待校验",
+      // 材料变化 = 证据更新:此前的"已处理"标记不再可信,清空重判
+      resolvedIssues: [],
       // POC 演示：未接 OCR，首次上传后按场景预设模拟"已解析"（含典型问题演示三态校验）
       ...(firstUpload && !project.fieldPool ? { fieldPool: seedAssistFieldPool(true), contributionRows: DEMO_CONTRIBUTION_ROWS } : {}),
     });
@@ -1002,11 +1120,12 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
     }, 1200);
   };
 
-  /** 开始/重新校验：材料校验中 → 1.6s 后按引擎实算落库（状态、三域计数、版本、时间）。 */
+  /** 开始/重新校验：材料校验中 → 1.6s 后按引擎实算落库（状态、三域计数、版本、时间；问题数按"未处理"口径）。 */
   const runValidation = () => {
     if (project.materials.length === 0 || project.status === "材料校验中") return;
+    if (project.materialVersion === project.validatedVersion && (project.resolvedKeyAtValidation ?? "") === resolvedKey) return;
     onUpdate({ status: "材料校验中" });
-    const { failed, missing, passed } = validation.summaries.reduce(
+    const { failed, missing, passed } = adjValidation.summaries.reduce(
       (acc, s) => ({ failed: acc.failed + s.failed, missing: acc.missing + s.missing, passed: acc.passed + s.passed }),
       { failed: 0, missing: 0, passed: 0 },
     );
@@ -1018,6 +1137,7 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
         passedCount: passed,
         validatedAt: "刚刚",
         validatedVersion: project.materialVersion,
+        resolvedKeyAtValidation: resolvedKey,
         materials: project.materials.map(m => (m.recog === "识别中" ? { ...m, recog: "已识别" as const } : m)),
       });
     }, 1600);
@@ -1032,13 +1152,47 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
         materials: [], uploadedCount: 0, materialVersion: project.materialVersion + 1,
         status: "待上传材料", fieldPool: undefined, contributionRows: undefined,
         mismatchCount: 0, missingCount: 0, passedCount: 0, validatedAt: undefined, validatedVersion: undefined,
+        resolvedIssues: [], resolvedKeyAtValidation: undefined, generatedDocs: undefined, generatedCount: 0,
       });
     } else {
       onUpdate({
         materials: next, uploadedCount: next.length, materialVersion: project.materialVersion + 1,
-        status: "待校验",
+        status: "待校验", resolvedIssues: [],
       });
     }
+  };
+
+  /** 生成商务委材料稿:真实 docx 生成器(OdiField[] → Blob),产出后可下载。 */
+  const handleGenerateDoc = async (docId: string) => {
+    const def = GEN_DOC_DEFS.find(d => d.id === docId);
+    if (!def || !project.fieldPool || genBusy) return;
+    setGenBusy(docId);
+    try {
+      const blob = await def.gen(project.fieldPool);
+      const url = URL.createObjectURL(blob);
+      setDocUrls(prev => {
+        if (prev[docId]) URL.revokeObjectURL(prev[docId]);
+        return { ...prev, [docId]: url };
+      });
+      onUpdate(p => {
+        const docs = [...new Set([...(p.generatedDocs ?? []), docId])];
+        return { generatedDocs: docs, generatedCount: docs.length };
+      });
+    } catch (e) {
+      window.alert(`生成失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setGenBusy(null);
+    }
+  };
+
+  const handleDownloadDoc = (docId: string) => {
+    const def = GEN_DOC_DEFS.find(d => d.id === docId);
+    const url = docUrls[docId];
+    if (!def || !url) return;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${def.name}.docx`;
+    a.click();
   };
 
   const TABS: { key: DetailTab; label: string }[] = [
@@ -1081,10 +1235,10 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
 
       {/* Content */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        {activeTab === "overview"   && <OverviewPage   project={project} validation={validation} onTab={setActiveTab} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
+        {activeTab === "overview"   && <OverviewPage   project={project} validation={adjValidation} onTab={setActiveTab} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
         {activeTab === "materials"  && <MaterialsPage  project={project} onFiles={handleFiles} onAskAssistant={onAskAssistant} onDelete={handleDeleteMaterial} onPreview={setPreviewMat} />}
-        {activeTab === "review"     && <ReviewPage     project={project} validation={validation} onLocate={setLocateCheck} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
-        {activeTab === "generate"   && <GeneratePage   project={project} onAskAssistant={onAskAssistant} />}
+        {activeTab === "review"     && <ReviewPage     project={project} validation={adjValidation} resolvedChecks={resolvedChecks} resolvedKey={resolvedKey} onToggleResolved={toggleResolved} onLocate={setLocateCheck} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
+        {activeTab === "generate"   && <GeneratePage   project={project} adjIssueCount={adjValidation.summaries.reduce((a, s) => a + s.failed + s.missing, 0)} docUrls={docUrls} genBusy={genBusy} onGenerate={handleGenerateDoc} onDownload={handleDownloadDoc} onPreview={setPreviewGen} onAskAssistant={onAskAssistant} />}
       </div>
 
       {/* 证据定位抽屉(原文出处) */}
@@ -1095,6 +1249,11 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
       {/* 材料预览弹窗(识别原文) */}
       {previewMat && (
         <MaterialPreviewModal mat={previewMat} doc={materialDocs.find(d => d.material === materialKeyOf(previewMat.name))} onClose={() => setPreviewMat(null)} />
+      )}
+
+      {/* 生成稿字段灌入预览 */}
+      {previewGen && (
+        <GenDocPreviewModal def={previewGen} pool={project.fieldPool ?? []} onClose={() => setPreviewGen(null)} />
       )}
     </div>
   );

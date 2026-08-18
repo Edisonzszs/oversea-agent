@@ -45,6 +45,9 @@ export interface AssistProject {
   validatedAt?: string;           // 最近校验时间（显示用）
   fieldPool?: OdiField[];         // 已解析字段池（未上传/未解析时缺省，校验引擎输入）
   contributionRows?: OdiContributionRow[]; // 中方投资额构成明细行（备案表构成表解析，A-034~039 输入）
+  resolvedIssues?: string[];      // 已标记处理的问题 id（用户线下整改后标记；重新校验不再计入。材料增删时清空）
+  resolvedKeyAtValidation?: string; // 最近校验时的已处理集合签名（材料版本与签名均未变 → 禁止重复校验）
+  generatedDocs?: string[];       // 已生成的商务委材料稿 id（生成管理页实际产出）
 }
 
 /** 按文件名推断材料类型/所属范围（POC 演示：未接 OCR，仅按名归类） */

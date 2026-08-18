@@ -100,6 +100,10 @@ function AskIcon({ question, label, size = 26 }: { question: string; label?: str
   );
 }
 
+// 题块内部上下文:嵌在 QuestionBlock 正文里的 FormRow 跟随题块的显隐,
+// 不再按自身标签过滤(否则高风险模式下"客观不适用理由"等条件必填联动字段被藏起来,校验报错却无处可填)
+const InQuestionBlockCtx = createContext(false);
+
 // ─── 题块（题干 + 可选分析依据 + 正文）──────────────────────────────────────
 export function QuestionBlock({ stem, children, law }: { stem: ReactNode; children?: ReactNode; law?: string }) {
   const [open, setOpen] = useState(false);
@@ -115,7 +119,7 @@ export function QuestionBlock({ stem, children, law }: { stem: ReactNode; childr
         <div style={{ flex: 1, fontSize: 14.5, fontWeight: 700, color: C.ink, lineHeight: 1.6 }}>{stem}</div>
         <AskIcon question={seed()} label={typeof stem === "string" ? stem : undefined} size={26} />
       </div>
-      {children}
+      <InQuestionBlockCtx.Provider value={true}>{children}</InQuestionBlockCtx.Provider>
       {law && (
         <div style={{ marginTop: 6 }}>
           <button onClick={() => setOpen(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12.5, color: C.primary, padding: 0 }}>
@@ -188,7 +192,8 @@ export function CheckQ({ values, options, onToggle, noneValue }: {
 // ─── 文本/下拉（栅格行）──────────────────────────────────────────────────────
 export function FormRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   const riskFilter = useContext(HighRiskFilterCtx);
-  if (riskFilter && !matchHighRisk(label, riskFilter)) return null;
+  const inBlock = useContext(InQuestionBlockCtx);
+  if (riskFilter && !inBlock && !matchHighRisk(label, riskFilter)) return null;
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", margin: "9px 0", flexWrap: "wrap", fontSize: 13.5 }}>
       <span style={{ flex: "0 0 140px", fontWeight: 700, color: C.ink }}>{label}</span>

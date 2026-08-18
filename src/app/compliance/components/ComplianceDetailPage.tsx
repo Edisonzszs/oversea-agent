@@ -105,7 +105,12 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
     setGenSig(answersSig(next));
     setTab("report");
     persist(next, r.grade, r.fileScore.score);
+    // 重新生成报告 = 本轮修改闭环结束,自动退出高风险过滤模式
+    setHighRiskSteps([]);
+    setHighRiskItems([]);
   };
+
+  const exitHighRisk = () => { setHighRiskSteps([]); setHighRiskItems([]); };
 
   const handleFixHighRisk = () => {
     if (!report || highRiskCount === 0) return;
@@ -152,7 +157,7 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
       <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {tab === "wizard" && (
-            <ComplianceWizard state={working} setState={updateState} onGenerated={handleGenerated} onAskCopilot={(q) => { setCopilotSeed(q); setCopilotCollapsed(false); }} onInstantQA={(q, a, clauses) => { setCopilotCollapsed(false); setInstantQA({ q, a, clauses }); }} highRiskSteps={highRiskSteps} highRiskItems={highRiskItems} />
+            <ComplianceWizard state={working} setState={updateState} onGenerated={handleGenerated} onAskCopilot={(q) => { setCopilotSeed(q); setCopilotCollapsed(false); }} onInstantQA={(q, a, clauses) => { setCopilotCollapsed(false); setInstantQA({ q, a, clauses }); }} highRiskSteps={highRiskSteps} highRiskItems={highRiskItems} onExitHighRisk={exitHighRisk} />
           )}
           {tab === "report" && (
             report

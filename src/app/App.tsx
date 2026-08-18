@@ -379,6 +379,43 @@ export default function App() {
     }));
   };
 
+  // 模拟填报项目回写(完成填报/步进进度),同助办口径
+  const handleUpdateDemoProject = (
+    id: string,
+    patch: Partial<DemoProject> | ((p: DemoProject) => Partial<DemoProject>),
+  ) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== id || p.serviceType !== "demo") return p;
+      const resolved = typeof patch === "function" ? patch(p) : patch;
+      return { ...p, ...resolved, updatedAt: "刚刚" };
+    }));
+  };
+
+  // 从模拟体验发起正式申报助办:新建「新项目」并挂 fromDemoId(模拟数据不带入,需重新上传材料)
+  const handleLaunchAssistFromDemo = (demoId: string) => {
+    const p: AssistProject = {
+      serviceType: "assist",
+      id: `p${Date.now()}`,
+      name: "新项目",
+      status: "待上传材料",
+      investmentType: "新设",
+      uploadedCount: 0,
+      mismatchCount: 0,
+      missingCount: 0,
+      passedCount: 0,
+      generatedCount: 0,
+      updatedAt: "刚刚",
+      fromDemoId: demoId,
+      materials: [],
+      materialVersion: 0,
+    };
+    setProjects(prev => [p, ...prev]);
+    setActiveProjectId(p.id);
+    setAssistantCollapsed(false);
+    setAssistantCtx({ type: "project", projectId: p.id, projectName: p.name });
+    setMode("odi-project");
+  };
+
   const handleAskAssistant = (ctx: AssistantContext) => {
     setAssistantCtx(ctx);
     setAssistantCollapsed(false);
@@ -600,6 +637,8 @@ export default function App() {
             <OdiDemoDetailPage
               project={activeProject as DemoProject}
               onBack={() => { setMode("odi-list"); setActiveProjectId(null); }}
+              onUpdate={patch => handleUpdateDemoProject(activeProject.id, patch)}
+              onLaunchAssist={() => handleLaunchAssistFromDemo(activeProject.id)}
             />
           )}
 
