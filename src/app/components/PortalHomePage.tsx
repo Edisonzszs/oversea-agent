@@ -1,15 +1,16 @@
 import { useRef, useState } from "react";
-import cleanBase from "../../imports/image-19.png";
+import cleanBase from "../../imports/portal-base.png";
+import shanghaiLogo from "../../imports/shanghai-logo.png";
 import xiaohaiBot from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
 
 /**
  * Portal_Home_Desktop —— 上海市企业出海综合服务平台首页智能体入口。
- * 迁移自 Figma 设计源码(出海智能体设计 (最新版) ( AI搜索-gpt)/HomePage.tsx),版式不变。
+ * 迁移自 Figma 设计源码(HomePage.tsx)并按新底图重构叠加层。
  *
- * image-19 为“干净官网底图”，作为真实背景资产直接使用：城市景观、平台 Logo、
- * 平台标题、SHANGHAI DESK 均来自底图，绝不重绘。其余元素均为叠加在底图之上的
- * 可编辑组件：顶部导航、登录辅助入口、左侧资讯卡、右侧浮动按钮、沪航者机器人、智能输入卡。
- * 只保留一条蓝色导航、一个平台 Logo/标题（均来自底图）。
+ * portal-base.png 为"干净官网底图"（城市景观 + 顶部纯色蓝条 ~7vh，无导航/标题/Logo 烤入）。
+ * 顶端导航（叠在蓝条内）、中部平台标题锁版（上海 Logo + SHANGHAI DESK + 平台名）、
+ * 登录辅助入口（蓝条右侧）、左侧资讯卡、右侧浮动按钮、沪航者机器人、智能输入卡
+ * 均为叠加在底图之上的可编辑组件。
  */
 
 const NAV_ITEMS = [
@@ -98,11 +99,14 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
         draggable={false}
       />
 
-      {/* ── 顶部导航（叠加在底图已有蓝色条内，唯一一条导航） ── */}
+      {/* ── 顶部导航（叠加在底图蓝条内，唯一一条导航） ── */}
       <HeaderNavigation />
 
-      {/* ── 登录 / 繁体 / 无障碍 辅助入口 ── */}
+      {/* ── 登录 / 繁体 / 无障碍 辅助入口（蓝条右侧） ── */}
       <HeaderUtilityLinks onLogin={onLogin} />
+
+      {/* ── 中部平台标题锁版：上海 Logo + 平台名 + SHANGHAI DESK ── */}
+      <HeroLockup />
 
       {/* ── 右侧浮动服务按钮:公众号 / 小程序 / 网页端 / 智能体(直达) ── */}
       <FloatingServiceBar onEnterAgent={onEnterAgent} />
@@ -247,16 +251,18 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
   );
 }
 
-/* ── HeaderNavigation ── */
+/* ── HeaderNavigation：叠在底图顶部蓝条内(蓝条 ~7vh) ── */
+const NAV_BAR_H = "clamp(38px, 6.6vh, 64px)";
+
 function HeaderNavigation() {
   const [hover, setHover] = useState<string | null>(null);
   return (
     <nav
       style={{
-        position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
-        height: "clamp(38px, 4.2vh, 52px)", width: "66%",
+        position: "absolute", top: 0, left: "46%", transform: "translateX(-50%)",
+        height: NAV_BAR_H, width: "58%",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        zIndex: 20, gap: "0.5vw",
+        zIndex: 20, gap: "0.4vw",
       }}
     >
       {NAV_ITEMS.map((item) => {
@@ -270,12 +276,12 @@ function HeaderNavigation() {
             style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", padding: "0 2px" }}
           >
             <span style={{
-              color: active || isHover ? "#ffffff" : "rgba(255,255,255,0.86)",
-              fontSize: "clamp(13px, 0.92vw, 17px)", fontWeight: active ? 600 : 400,
-              whiteSpace: "nowrap", transition: "color 0.15s", textShadow: "0 1px 2px rgba(0,0,0,0.15)",
+              color: active || isHover ? "#ffffff" : "rgba(255,255,255,0.88)",
+              fontSize: "clamp(12px, 0.88vw, 16px)", fontWeight: active ? 600 : 400,
+              whiteSpace: "nowrap", transition: "color 0.15s", textShadow: "0 1px 2px rgba(0,0,0,0.18)",
             }}>{item}</span>
             {active && (
-              <span style={{ position: "absolute", bottom: -7, width: "70%", height: 2.5, borderRadius: 2, background: "#cfe4ff" }} />
+              <span style={{ position: "absolute", bottom: 4, width: "70%", height: 2.5, borderRadius: 2, background: "#cfe4ff" }} />
             )}
           </div>
         );
@@ -284,24 +290,59 @@ function HeaderNavigation() {
   );
 }
 
-/* ── HeaderUtilityLinks ── */
+/* ── HeaderUtilityLinks：蓝条右侧(白字,与导航同行) ── */
 function HeaderUtilityLinks({ onLogin }: { onLogin?: () => void }) {
   return (
     <div style={{
-      position: "absolute", top: "calc(clamp(38px,4.2vh,52px) + 30px)", right: "9%",
+      position: "absolute", top: 0, right: "2.2%",
+      height: NAV_BAR_H,
       display: "flex", alignItems: "center", gap: 10, zIndex: 20,
     }}>
       {["登录", "繁体", "无障碍"].map((t, i) => (
         <div key={t} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {i > 0 && <span style={{ width: 1, height: 11, background: "rgba(255,255,255,0.5)" }} />}
+          {i > 0 && <span style={{ width: 1, height: 11, background: "rgba(255,255,255,0.45)" }} />}
           <button
             onClick={t === "登录" ? onLogin : undefined}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.9)", fontSize: 12.5, fontFamily: "inherit", padding: 0, textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.92)", fontSize: 12.5, fontFamily: "inherit", padding: 0, textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.9)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.92)")}
           >{t}</button>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ── HeroLockup：中部平台标题锁版(上海 Logo + 平台名 + SHANGHAI DESK) ── */
+function HeroLockup() {
+  return (
+    <div style={{
+      position: "absolute", top: "clamp(78px, 13vh, 150px)", left: "50%", transform: "translateX(-50%)",
+      display: "flex", alignItems: "center", gap: "clamp(14px, 1.6vw, 22px)", zIndex: 12,
+    }}>
+      {/* 上海 Logo(白色主体)置于品牌蓝圆角衬底上 */}
+      <div style={{
+        width: "clamp(58px, 5.4vw, 78px)", height: "clamp(58px, 5.4vw, 78px)", flexShrink: 0,
+        borderRadius: "clamp(14px, 1.3vw, 18px)",
+        background: "linear-gradient(135deg,#2d78e8 0%,#0f4fa8 100%)",
+        boxShadow: "0 10px 26px rgba(13,54,116,0.30)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <img src={shanghaiLogo} alt="上海市企业出海综合服务平台" draggable={false}
+          style={{ width: "76%", height: "76%", objectFit: "contain" }} />
+      </div>
+      <div>
+        <h1 style={{
+          margin: 0, fontSize: "clamp(24px, 2.5vw, 36px)", fontWeight: 800, color: "#0b3a7a",
+          letterSpacing: "0.1em", lineHeight: 1.25,
+          textShadow: "0 2px 12px rgba(255,255,255,0.7)",
+          fontFamily: "'PingFang SC','Microsoft YaHei','Hiragino Sans GB',sans-serif",
+        }}>上海市企业出海综合服务平台</h1>
+        <p style={{
+          margin: "clamp(4px, 0.6vh, 8px) 0 0", fontSize: "clamp(10px, 0.92vw, 13px)",
+          fontWeight: 600, color: "#3a6db5", letterSpacing: "0.42em", whiteSpace: "nowrap",
+        }}>SHANGHAI DESK</p>
+      </div>
     </div>
   );
 }
