@@ -1,7 +1,7 @@
 // 合规自查详情页：tab 容器（自查向导 / 自查报告），托管向导状态并持久化到项目。
 // 已完成项目默认进报告 tab（只读）；"重新自查"回到向导。
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { C } from "../complianceTheme";
 import { createInitialState, clearBranchAnswers, prefillFromQuickAnswers, takeQuickAnswersFromSession, type WizardState } from "../logic/wizardModel";
 import { buildReport, type ReportResult } from "../logic/scoring";
@@ -44,6 +44,18 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
   const highRiskCount = report?.items.filter(it => it.grade === "C" || it.grade === "D").length ?? 0;
   const stateRef = useRef(working);
   stateRef.current = working;
+
+  // 自动命名(类对话标题):名称还是默认「新项目」时,按勾选的投资方式 + 输入的目的地国别生成一次;
+  // 用户手动改名(侧栏重命名)后名称不再是「新项目」,不再覆盖。
+  useEffect(() => {
+    if (project.name !== "新项目") return;
+    const mode = working.mode;
+    const ctry = working.answers.single["p_ctry"];
+    if (!mode || !ctry) return;
+    const verb = ({ new: "新设", ma: "并购", chg: "变更" } as const)[mode];
+    onUpdate({ name: `${ctry}·${verb}投资·合规自查` });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [working.mode, working.answers.single["p_ctry"], project.name]);
 
   // wizardApi 适配器：把伴填面板的写入操作汇入本页 working 状态（与向导同一份 WizardState）。
   const wizardApi: WizardApi = {

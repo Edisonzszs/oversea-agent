@@ -27,7 +27,6 @@ import { MOCK_COMPLIANCE_PROJECTS, type ComplianceProject } from "./compliance/d
 import { ComplianceSidebar, type ComplianceView } from "./compliance/components/ComplianceSidebar";
 import { ComplianceListPage } from "./compliance/components/ComplianceListPage";
 import { ComplianceDetailPage } from "./compliance/components/ComplianceDetailPage";
-import { NewComplianceProjectModal } from "./compliance/components/NewComplianceProjectModal";
 import { RenameModal, DeleteConfirmModal } from "./compliance/components/ComplianceItemMenu";
 import { useAuth, type AuthUser } from "./auth/useAuth";
 import { LoginPage } from "./components/LoginPage";
@@ -97,7 +96,6 @@ export default function App() {
   const [complianceProjects, setComplianceProjects] = useState<ComplianceProject[]>(MOCK_COMPLIANCE_PROJECTS);
   const [activeComplianceId, setActiveComplianceId] = useState<string | null>(null);
   const [complianceView, setComplianceView] = useState<ComplianceView>("all");
-  const [showNewComplianceModal, setShowNewComplianceModal] = useState(false);
   // 版本选择弹窗(进入「ODI 合规自查专家」)+ 登录后回弹窗标记
   const [showVersionModal, setShowVersionModal] = useState(false);
   const [pendingComplianceEntry, setPendingComplianceEntry] = useState(false);
@@ -223,12 +221,13 @@ export default function App() {
     setMode("compliance");
   };
 
-  // 去完整版:匿名/登录都直接开始(照《企业合规自查流程.txt》,匿名项目存本机)。
+  // 去完整版:匿名/登录都直接开始,免起名——默认「新项目」,
+  // 进向导后按勾选的投资方式+输入的目的地自动命名(类对话标题)。
   const handleVersionFull = () => {
     setShowVersionModal(false);
     setQuickTestActive(false);
     setMode("compliance");
-    setShowNewComplianceModal(true);
+    handleCreateCompliance("新项目");
   };
 
   // 匿名版弹窗「立即登录」:去登录页,登录成功后回合规空间并弹(登录版)选择弹窗。
@@ -250,14 +249,13 @@ export default function App() {
     }
   };
 
-  // 速测版 → 升级完整版:存速测作答(同题号体系,供完整版参考/灌入),未登录先登录。
+  // 速测版 → 升级完整版:存速测作答(同题号体系,供完整版参考/灌入),免起名直接建「新项目」。
   const handleQuickUpgrade = (quickAnswers: Answers) => {
     try { sessionStorage.setItem("chuhai_quick_answers", JSON.stringify(quickAnswers)); } catch { /* ignore */ }
     setShowVersionModal(false);
-    // 匿名/登录都直接开完整版项目名弹窗(作答经 sessionStorage 预填灌入)。
     setQuickTestActive(false);
     setMode("compliance");
-    setShowNewComplianceModal(true);
+    handleCreateCompliance("新项目");
   };
 
   // (ODI detour 已撤:ODI 统一走 Figma 设计线 handleEnterOdiWorkbench → odi-list/odi-project/odi-demo)
@@ -282,7 +280,6 @@ export default function App() {
       updatedAt: "刚刚",
     };
     setComplianceProjects(prev => [p, ...prev]);
-    setShowNewComplianceModal(false);
     setActiveComplianceId(p.id);
   };
 
@@ -313,7 +310,7 @@ export default function App() {
       const p: AssistProject = {
         serviceType: "assist",
         id: `p${Date.now()}`,
-        name: result.name,
+        name: "新项目", // 免起名:进详情后按材料识别字段/上传文件自动命名(类对话标题)
         status: "待上传材料",
         investmentType: "新设",
         uploadedCount: 0,
@@ -678,15 +675,7 @@ export default function App() {
         />
       )}
 
-      {/* New compliance modal */}
-      {showNewComplianceModal && (
-        <NewComplianceProjectModal
-          existingNames={complianceProjects.map(p => p.name)}
-          onConfirm={handleCreateCompliance}
-          onCancel={() => setShowNewComplianceModal(false)}
-        />
-      )}
-
+      {/* (合规新建免起名:选版本后直接建「新项目」,进向导后按选项/输入自动命名;原名称弹窗已撤) */}
       {/* (ODI detour 新建弹窗已撤:新建走 Figma 设计线 OdiProjectListPage 的 onNewProject → NewOdiProjectModal) */}
     </div>
   );

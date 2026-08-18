@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { DemoScene, DemoMode } from "./odiProjectData";
 
 export type NewTaskResult =
-  | { kind: "assist"; name: string }
+  | { kind: "assist" }
   | { kind: "demo"; scene: DemoScene; mode: DemoMode };
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
   onCancel: () => void;
 }
 
-type Step = "type" | "demo-scene" | "assist-name";
+type Step = "type" | "demo-scene";
 
 const SCENES: { scene: DemoScene; desc: string; country: string; duration: string; tags: string[]; recommended?: true }[] = [
   {
@@ -198,51 +198,7 @@ function DemoSceneStep({ onSelect, onBack }: { onSelect: (scene: DemoScene, mode
   );
 }
 
-// ── Step 2b: assist name input ─────────────────────────────────────────────────
-function AssistNameStep({ onConfirm, onBack }: { onConfirm: (name: string) => void; onBack: () => void }) {
-  const [name, setName] = useState("");
-  const [focused, setFocused] = useState(false);
-  return (
-    <div style={{ width: 520, padding: "36px 40px 32px" }}>
-      <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#6b7280", padding: 0, marginBottom: 16, display: "flex", alignItems: "center", gap: 4 }}>
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="#6b7280" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        返回
-      </button>
-      <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800, color: "#111827" }}>创建申报助办任务</h2>
-      <p style={{ margin: "0 0 24px", fontSize: 13, color: "#6b7280" }}>填写任务名称后，可进入项目详情并上传材料。</p>
-
-      <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600, color: "#374151" }}>任务名称</label>
-      <input
-        value={name}
-        onChange={e => setName(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder="例：越南新设智能装备生产基地项目"
-        autoFocus
-        style={{
-          width: "100%", height: 44, borderRadius: 10, padding: "0 14px",
-          border: `1.5px solid ${focused ? "#1a5bc6" : "#d1d5db"}`,
-          fontSize: 14, color: "#111827", outline: "none", boxSizing: "border-box",
-          transition: "border-color 0.15s",
-        }}
-      />
-      <p style={{ margin: "8px 0 28px", fontSize: 12, color: "#9ca3af", lineHeight: 1.6 }}>
-        名称仅用于任务管理，可随时修改。正式项目信息以上传材料识别结果为准。
-      </p>
-
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button onClick={onBack} style={btnGhost}>取消</button>
-        <button
-          onClick={() => { if (name.trim()) onConfirm(name.trim()); }}
-          disabled={!name.trim()}
-          style={{ ...btnPrimary, opacity: name.trim() ? 1 : 0.45, cursor: name.trim() ? "pointer" : "not-allowed" }}
-          onMouseEnter={e => { if (name.trim()) e.currentTarget.style.background = "#1549a8"; }}
-          onMouseLeave={e => { if (name.trim()) e.currentTarget.style.background = "#1a5bc6"; }}
-        >创建并进入</button>
-      </div>
-    </div>
-  );
-}
+// (原 Step 2b 助办起名步已撤:免起名直接建「新项目」,进详情后按材料识别字段/上传文件自动命名)
 
 // ── Root modal ─────────────────────────────────────────────────────────────────
 export function NewOdiProjectModal({ onConfirm, onCancel }: Props) {
@@ -252,18 +208,12 @@ export function NewOdiProjectModal({ onConfirm, onCancel }: Props) {
     <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onCancel(); }}>
       <div style={modal}>
         {step === "type" && (
-          <TypeStep onSelect={t => setStep(t === "demo" ? "demo-scene" : "assist-name")} />
+          <TypeStep onSelect={t => { if (t === "demo") setStep("demo-scene"); else onConfirm({ kind: "assist" }); }} />
         )}
         {step === "demo-scene" && (
           <DemoSceneStep
             onBack={() => setStep("type")}
             onSelect={(scene, mode) => onConfirm({ kind: "demo", scene, mode })}
-          />
-        )}
-        {step === "assist-name" && (
-          <AssistNameStep
-            onBack={() => setStep("type")}
-            onConfirm={name => onConfirm({ kind: "assist", name })}
           />
         )}
         {/* Close button —— 钉在弹窗右上角(modal 已 position:relative) */}

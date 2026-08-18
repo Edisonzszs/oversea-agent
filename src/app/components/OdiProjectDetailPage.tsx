@@ -920,6 +920,24 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
     [project.fieldPool, project.contributionRows],
   );
 
+  // 自动命名(类对话标题):名称还是默认「新项目」时,优先取材料识别出的项目名称,
+  // 其次 投资国家·投资方式,识别前用首个上传文件名兜底;生成一次后(或用户手动改名)不再覆盖。
+  useEffect(() => {
+    if (project.name !== "新项目") return;
+    const fv = (code: string) => {
+      const f = (project.fieldPool ?? []).find(x => x.code === code);
+      return f?.value?.trim() || f?.materialValues?.[0]?.value?.trim() || "";
+    };
+    const projName = fv("project_name").slice(0, 30);
+    if (projName) { onUpdate({ name: projName }); return; }
+    const country = fv("investment_country") || fv("direct_destination") || fv("final_destination");
+    const method = fv("investment_method");
+    if (country && method) { onUpdate({ name: `${country}·${method}·ODI助办` }); return; }
+    const first = project.materials[0];
+    if (first) onUpdate({ name: `${first.name.replace(/\.[^.]+$/, "").slice(0, 20)}·ODI助办` });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.name, project.fieldPool, project.materials]);
+
   // 卸载时清掉识别/校验的演示定时器
   useEffect(() => () => { timersRef.current.forEach(t => window.clearTimeout(t)); }, []);
   const later = (fn: () => void, ms: number) => { timersRef.current.push(window.setTimeout(fn, ms)); };
