@@ -36,7 +36,7 @@ export function StepProfile({ api }: { api: WizardApi }) {
         </SelectInput>
       </FormRow>
 
-      <FormRow label="拟投资行业类别" hint="联动模块五行业要点；审批按行业展开审查（境外设厂选 C 制造业；海外仓选 G 交通运输；咨询服务选 L 租赁和商务服务业）">
+      <FormRow label="拟投资行业类别" hint="联动模块五行业要点采集与提示；审批环节将按行业展开审查（选择示例：境外设厂选“C 制造业”；海外仓选“G 交通运输、仓储和邮政业”；咨询服务选“L 租赁和商务服务业”）">
         <SelectInput value={s.answers.single["p_ind2"] ?? ""} onChange={v => api.setSingle("p_ind2", v)}>
           <option value="">请选择（GB/T 4754—2017）</option>
           {IND_OPTS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
@@ -152,6 +152,7 @@ export function StepInvestMode({ api }: { api: WizardApi }) {
             <RadioQ name="m0b" value={val(s, "m0b")} options={M0B_OPTS} onChange={v => api.setSingle("m0b", v)} />
           </QuestionBlock>
           <QuestionBlock stem="B-3　是否已取得法律尽调、财务审计、第三方估值报告（机构有执业资质并加盖签章）？">
+            <div style={noteStyle}>客观不适用机制仅放开“标的公司财务审计报告”（如标的为新设企业、无历史财务数据，客观上无法出具）；“暂未形成”不属于客观不适用</div>
             <RadioQ name="m1" value={val(s, "m1")} options={M1_OPTS} onChange={v => api.setSingle("m1", v)} />
             {val(s, "m1") === "na" && (
               <div style={{ background: "#F7FAFD", border: `1px solid ${C.line}`, borderLeft: `4px solid ${C.primary}`, borderRadius: "0 8px 8px 0", padding: "10px 14px", margin: "8px 0" }}>

@@ -88,9 +88,9 @@ export const STEPS: StepDef[] = [
   { key: 0, short: "使用说明", title: "使用说明（企业必读）" },
   { key: 1, short: "企业画像", title: "模块〇　企业画像（不计分）", module: "模块〇" },
   { key: 2, short: "主体资格", title: "模块一　主体资格自查", module: "模块一" },
-  { key: 3, short: "投资方式", title: "模块二　投资方式与投资行为自查（分支填写）", module: "模块二" },
+  { key: 3, short: "投资方式", title: "模块二　投资方式与投资行为自查", module: "模块二" },
   { key: 4, short: "标的项目", title: "模块三　境外标的与项目信息自查", module: "模块三" },
-  { key: 5, short: "安全审查", title: "模块四　安全审查与敏感要素自查", module: "模块四" },
+  { key: 5, short: "安全审查", title: "模块四　安全审查与敏感要素自查（前置环节）", module: "模块四" },
   { key: 6, short: "行业国别", title: "模块五　行业与国别（信息采集）", module: "模块五" },
 ];
 

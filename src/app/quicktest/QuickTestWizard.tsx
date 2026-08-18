@@ -336,6 +336,7 @@ function QView({ q, a, set, toggle }: { q: Question; a: Answers; set: SetFn; tog
   return (
     <QuestionBlock stem={q.stem} law={q.law}>
       <RadioQ name={q.id} value={val(a, q.id)} options={q.opts || []} onChange={v => set(q.id, v)} />
+      {q.hint && <p style={{ fontSize: 12, color: C.muted, margin: "6px 0 0", lineHeight: 1.5 }}>{q.hint}</p>}
     </QuestionBlock>
   );
 }
