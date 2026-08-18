@@ -421,6 +421,15 @@ export default function App() {
     setAssistantCollapsed(false);
   };
 
+  // 「问沪航者」语境 → 预填问题(面板展开 + 输入框带入语境,用户确认后再发送)
+  const assistantSeed = assistantCtx
+    ? assistantCtx.type === "material"
+      ? `关于材料「${assistantCtx.materialName}」：这份材料在 ODI 备案中的作用、识别要点和常见问题有哪些？`
+      : assistantCtx.type === "issue"
+      ? `校验发现的问题「${assistantCtx.issueName}」（${assistantCtx.department}）应如何处理？请给出具体整改建议。`
+      : `关于 ODI 助办项目「${assistantCtx.projectName}」：帮我梳理当前进度、待处理问题和下一步建议。`
+    : null;
+
   const handleSelectConversation = (id: string) => {
     setActiveConvId(id);
     setChatSeed(null); // 切走即清携带问题,避免残留 seed 影响后续新对话
@@ -679,6 +688,8 @@ export default function App() {
             collapsed={assistantCollapsed}
             onToggleCollapse={() => setAssistantCollapsed(v => !v)}
             context={{ projectId: activeProject.id, projectName: activeProject.name }}
+            seed={assistantSeed}
+            onSeedConsumed={() => setAssistantCtx(null)}
           />
         )}
         {mode === "odi-demo" && activeProject?.serviceType === "demo" && (
@@ -686,6 +697,8 @@ export default function App() {
             collapsed={assistantCollapsed}
             onToggleCollapse={() => setAssistantCollapsed(v => !v)}
             context={{ projectId: activeProject.id, projectName: activeProject.name }}
+            seed={assistantSeed}
+            onSeedConsumed={() => setAssistantCtx(null)}
           />
         )}
       </div>

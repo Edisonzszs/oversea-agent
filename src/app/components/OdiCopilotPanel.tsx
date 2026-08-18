@@ -14,6 +14,9 @@ interface Props {
   collapsed: boolean;
   onToggleCollapse: () => void;
   context?: { projectId: string; projectName: string };
+  /** 问沪航者入口带入的语境问题:预填进输入框(不自动发送,用户确认后再走 API) */
+  seed?: string | null;
+  onSeedConsumed?: () => void;
 }
 
 type Clause = { id: string; point: string };
@@ -71,7 +74,7 @@ function parseOdiResponse(raw: string): { answer: string; clauses: Clause[] } {
   return { answer: trimmed, clauses: [] };
 }
 
-export function OdiCopilotPanel({ collapsed, onToggleCollapse, context }: Props) {
+export function OdiCopilotPanel({ collapsed, onToggleCollapse, context, seed, onSeedConsumed }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => [greeting(context?.projectName)]);
   const [input, setInput] = useState("");
   const [interim, setInterim] = useState("");
@@ -88,6 +91,16 @@ export function OdiCopilotPanel({ collapsed, onToggleCollapse, context }: Props)
       setMessages([greeting(context?.projectName)]);
     }
   }, [context?.projectName]);
+
+  // 「问沪航者」入口:语境问题预填输入框并聚焦(不自动发送——用户确认后再调用,
+  // 避免误触计费;面板由调用方同步展开)
+  useEffect(() => {
+    if (!seed) return;
+    setInput(seed);
+    onSeedConsumed?.();
+    if (!collapsed) setTimeout(() => inputRef.current?.focus(), 60);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
   useEffect(() => { const el = inputRef.current; if (!el) return; el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }, [input]);

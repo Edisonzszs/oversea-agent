@@ -146,13 +146,13 @@ function MaterialsPage({ project, onFiles, onAskAssistant, onDelete, onPreview }
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => onPreview(m)} title="查看识别原文"
                         style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #e5eaf2", background: "#f8fafc", fontSize: 11, color: "#374151", cursor: "pointer" }}>预览</button>
-                      <button onClick={() => onAskAssistant?.({ type: "material", projectId: project.id, projectName: project.name, materialId: m.id, materialName: m.name })}
-                        style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11, color: "#1a5bc6", cursor: "pointer" }}>问沪航者</button>
                       <button
                         onClick={() => { if (window.confirm(`确定删除「${m.name}」？删除后需重新上传并校验。`)) onDelete(m.id); }}
                         disabled={locked}
                         title={locked ? "校验进行中，暂锁定操作" : "删除该材料"}
                         style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${locked ? "#e5eaf2" : "#f3c4c4"}`, background: locked ? "#f8fafc" : "#fef6f6", fontSize: 11, color: locked ? "#9ca3af" : "#b91c1c", cursor: locked ? "default" : "pointer" }}>删除</button>
+                      <button onClick={() => onAskAssistant?.({ type: "material", projectId: project.id, projectName: project.name, materialId: m.id, materialName: m.name })}
+                        style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11, color: "#1a5bc6", cursor: "pointer" }}>问沪航者</button>
                     </div>
                   </td>
                 </tr>
