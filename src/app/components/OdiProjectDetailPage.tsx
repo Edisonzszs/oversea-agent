@@ -164,6 +164,14 @@ function collectTargets(check: ValidationCheck, pool: OdiField[]): EvidenceTarge
   const refs = RULE_EVIDENCE_REFS[check.id] ?? [];
   const targets: EvidenceTarget[] = [];
   const push = (t: EvidenceTarget) => { if (!targets.some(x => x.material === t.material && x.value === t.value)) targets.push(t); };
+  // 正文类字段(承诺书/请示)是多行文本:按段拆成多个定位值,逐段在原文中定位
+  const pushValue = (material: OdiMaterialKey, raw: string, label: string) => {
+    if (raw.includes("\n")) {
+      for (const seg of raw.split(/\n+/).map(s => s.trim()).filter(Boolean)) push({ material, value: seg, label });
+    } else {
+      push({ material, value: raw, label });
+    }
+  };
   for (const ref of refs) {
     const field = pool.find(f => f.code === ref.code);
     const label = field?.name ?? allFieldDefs().find(d => d.code === ref.code)?.name ?? ref.code;
@@ -173,20 +181,27 @@ function collectTargets(check: ValidationCheck, pool: OdiField[]): EvidenceTarge
       // 主值也为空(如承诺书缺正文)→ 空 value 整文档模式,定位即"缺失"本身
       for (const material of ref.materials) {
         const mv = mvs.find(m => m.material === material);
-        push({ material, value: mv?.value ?? field?.value?.trim() ?? "", label });
+        pushValue(material, mv?.value ?? field?.value?.trim() ?? "", label);
       }
     } else if (mvs.length > 0) {
-      for (const m of mvs) push({ material: m.material, value: m.value, label });
+      for (const m of mvs) pushValue(m.material, m.value, label);
     } else if (field?.value?.trim()) {
-      push({ material: defaultMaterialFor(ref.code), value: field.value, label });
+      pushValue(defaultMaterialFor(ref.code), field.value, label);
     }
   }
   return targets;
 }
 
+/** "越南·胡志明市"式组合值:文档按 国/省(州)/城市 分栏后,拆段匹配各部分 */
+function destParts(v: string): string[] {
+  return v.includes("·") ? v.split("·").map(s => s.trim()).filter(p => p.length >= 2) : [];
+}
+
 /** 行内标记命中值(第一个命中):红/橙下划线+底色 */
 function MarkedLine({ line, values, bad }: { line: string; values: string[]; bad: boolean }) {
-  for (const v of values) {
+  const variants = [...values];
+  for (const v of values) variants.push(...destParts(v));
+  for (const v of variants) {
     if (!v?.trim()) continue;
     let idx = line.indexOf(v);
     let len = v.length;
@@ -297,6 +312,12 @@ function EvidenceDrawer({ check, docs, pool, onClose }: {
 function hitLineIndexes(doc: MaterialDoc, value: string): number[] {
   const hits: number[] = [];
   doc.lines.forEach((l, i) => { if (lineHitsValue(l, value)) hits.push(i); });
+  if (hits.length === 0) {
+    // 组合值整串未命中(文档分栏)时,按"·"拆段再试
+    for (const part of destParts(value)) {
+      doc.lines.forEach((l, i) => { if (lineHitsValue(l, part) && !hits.includes(i)) hits.push(i); });
+    }
+  }
   return hits;
 }
 

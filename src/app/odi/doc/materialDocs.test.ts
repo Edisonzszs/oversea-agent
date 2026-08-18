@@ -29,6 +29,52 @@ describe("materialDocs — 材料模拟原文", () => {
     expect(filing.lines.some(l => l.includes("91310000MA1FL2XX3A"))).toBe(true);
     expect(license.lines.some(l => l.includes("91310000MA1FL2XX3B"))).toBe(true);
   });
+
+  it("模板版式:发改备案表按十九大项格式文本(一、项目名称 → 十九、附件清单)", () => {
+    const docs = buildMaterialDocs(seedAssistFieldPool(false), DEMO_CONTRIBUTION_ROWS);
+    const filing = docs.find(d => d.material === "备案表")!;
+    const text = filing.lines.join("\n");
+    for (const sec of ["一、项目名称", "二、投资主体情况", "四、投资地点", "八、项目主要内容和规模",
+      "九、项目总投资额", "十、中方投资额", "十一、中方投资额构成", "十九、附件清单", "项目代码：（网络系统自动赋码）"]) {
+      expect(text.includes(sec)).toBe(true);
+    }
+    expect(text.includes("（七）境外投资真实性承诺书")).toBe(true); // 附件清单七项
+    expect(filing.lines.some(l => l.includes("手机：13800138000"))).toBe(true); // 申报联系人
+  });
+
+  it("模板版式:商务备案表按商务部门栏目(基本事由→设立方式→投资规模→承诺段→审批栏)", () => {
+    const docs = buildMaterialDocs(seedAssistFieldPool(false), DEMO_CONTRIBUTION_ROWS);
+    const commerce = docs.find(d => d.material === "商务备案表")!;
+    const text = commerce.lines.join("\n");
+    for (const sec of ["基本事由", "境内投资主体", "投资路径（仅限第一层级境外企业）", "境外企业名称（最终目的地）",
+      "股权结构", "设立方式", "注册资本", "投资规模", "中方出资币种和金额", "中方投资的构成", "投资具体情况",
+      "本单位承诺本表中涉及的投资无以下情形", "以下由商务部或省级商务主管机关填写"]) {
+      expect(text.includes(sec)).toBe(true);
+    }
+    expect(commerce.lines.some(l => l.includes("●新设"))).toBe(true); // 设立方式选中态
+  });
+
+  it("模板版式:承诺书按 4-1 商务模板(致委→引言→正文→落款→附签字单);请示按公文版式(标题→文号→落款)", () => {
+    const docs = buildMaterialDocs(seedAssistFieldPool(false), DEMO_CONTRIBUTION_ROWS);
+    const commit = docs.find(d => d.material === "承诺书")!;
+    const petition = docs.find(d => d.material === "请示")!;
+    expect(commit.lines.some(l => l.includes("上海市商务委员会："))).toBe(true);
+    expect(commit.lines.some(l => l.includes("此致。"))).toBe(true);
+    expect(commit.lines.some(l => l.includes("附：本项投资决策人员签字单"))).toBe(true);
+    expect(petition.lines.some(l => l.includes("〔2026〕X号"))).toBe(true); // 文号行
+    expect(petition.lines.some(l => l.includes("（加盖单位公章或本人签名）"))).toBe(true);
+  });
+
+  it("目的地组合值分栏:备案表/商务备案表按 国+省(州、市) 拆开渲染(整串不落文档,定位按段)", () => {
+    const docs = buildMaterialDocs(seedAssistFieldPool(false), DEMO_CONTRIBUTION_ROWS);
+    const filing = docs.find(d => d.material === "备案表")!;
+    const commerce = docs.find(d => d.material === "商务备案表")!;
+    const fdLine = filing.lines.find(l => l.includes("最终目的地"))!;
+    expect(fdLine.includes("越南")).toBe(true);
+    expect(fdLine.includes("胡志明市")).toBe(true);
+    expect(fdLine.includes("越南·胡志明市")).toBe(false); // 分栏后不再连续
+    expect(commerce.lines.some(l => l.includes("国家（地区）：越南"))).toBe(true);
+  });
 });
 
 describe("定位算法", () => {
