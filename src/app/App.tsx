@@ -31,6 +31,7 @@ import { NewComplianceProjectModal } from "./compliance/components/NewCompliance
 import { RenameModal, DeleteConfirmModal } from "./compliance/components/ComplianceItemMenu";
 import { useAuth, type AuthUser } from "./auth/useAuth";
 import { LoginPage } from "./components/LoginPage";
+import { PortalHomePage } from "./components/PortalHomePage";
 import { VersionSelectModal } from "./components/VersionSelectModal";
 import { QuickTestWizard } from "./quicktest/QuickTestWizard";
 import type { Answers } from "./quicktest/questions";
@@ -48,7 +49,7 @@ export type AppFrame =
   | "odi-project"
   | "odi-prereview";
 
-type AppMode = "xiaohai" | "odi-list" | "odi-project" | "odi-demo" | "compliance" | "login";
+type AppMode = "portal" | "xiaohai" | "odi-list" | "odi-project" | "odi-demo" | "compliance" | "login";
 
 export type FileStatus = "上传中" | "已上传" | "识别中" | "已识别";
 export type AttachedFile = { name: string; status: FileStatus; id: number };
@@ -56,8 +57,12 @@ export type AttachedFile = { name: string; status: FileStatus; id: number };
 const WORKBENCH_FRAMES: AppFrame[] = ["odi-preinfo", "odi-materials", "odi-project", "odi-prereview"];
 
 export default function App() {
-  // Mode state
-  const [mode, setMode] = useState<AppMode>("xiaohai");
+  // Mode state —— 默认进入"走出去服务平台"门户首页(Figma 设计线 Portal_Home_Desktop)
+  const [mode, setMode] = useState<AppMode>("portal");
+  // 门户首页 → 平台的携带问题(新对话落地自动发送);nonce 保证每次都重挂 ChatFrame
+  const [chatSeed, setChatSeed] = useState<{ q: string; nonce: number } | null>(null);
+  // 登录往返:从门户/平台进登录页,成功或返回时回原处
+  const [loginReturnMode, setLoginReturnMode] = useState<Exclude<AppMode, "login">>("xiaohai");
 
   // 登录态(POC:localStorage mock,不接真实后端)
   const { user: authUser, isAuthed, login, logout } = useAuth();
@@ -120,6 +125,20 @@ export default function App() {
   const [materialGenerationStarted, setMaterialGenerationStarted] = useState(false);
 
   // ── Navigation handlers ──
+
+  // 门户首页提交:携带问题落到小海新对话(自动发送),进平台态
+  const handlePortalSubmit = (question: string) => {
+    setChatSeed({ q: question, nonce: Date.now() });
+    setActiveConvId("new");
+    setMode("xiaohai");
+    setFrame("chat");
+  };
+
+  // 回门户首页(平台导航条「首页」)
+  const handleBackToPortal = () => setMode("portal");
+
+  // 统一登录入口:记录当前模式,登录成功/返回时回原处(合规"完整版→去登录"走自己的 pending 流程)
+  const enterLogin = () => { setLoginReturnMode(mode === "login" ? "xiaohai" : mode); setMode("login"); };
 
   const handleEnterOdiWorkbench = () => {
     setMode("odi-list");
@@ -184,7 +203,7 @@ export default function App() {
     setMode("login");
   };
 
-  // 登录成功:若是从"完整版→去登录"来,回合规空间并弹登录版选择弹窗;否则回首页。
+  // 登录成功:若是从"完整版→去登录"来,回合规空间并弹登录版选择弹窗;否则回进入登录前的位置。
   const handleLoginSuccess = (u: AuthUser) => {
     login(u);
     if (pendingComplianceEntry) {
@@ -192,7 +211,7 @@ export default function App() {
       setMode("compliance");
       setShowVersionModal(true);
     } else {
-      setMode("xiaohai");
+      setMode(loginReturnMode);
     }
   };
 
@@ -335,12 +354,14 @@ export default function App() {
 
   const handleSelectConversation = (id: string) => {
     setActiveConvId(id);
+    setChatSeed(null); // 切走即清携带问题,避免残留 seed 影响后续新对话
     setMode("xiaohai");
     setFrame("chat");
   };
 
   const handleNewConversation = () => {
     setActiveConvId("new");
+    setChatSeed(null);
     setMode("xiaohai");
     setFrame("chat");
   };
@@ -366,9 +387,22 @@ export default function App() {
         onLogin={handleLoginSuccess}
         onBack={() => {
           if (pendingComplianceEntry) { setPendingComplianceEntry(false); setMode("compliance"); }
-          else setMode("xiaohai");
+          else setMode(loginReturnMode);
         }}
       />
+    );
+  }
+
+  // 门户首页(走出去服务平台):底图 + 智能输入卡,全屏独立渲染,不带平台外壳
+  if (mode === "portal") {
+    return (
+      <div style={{ height: "100vh", width: "100%", overflow: "hidden", fontFamily: "'PingFang SC','Microsoft YaHei','Hiragino Sans GB',sans-serif" }}>
+        <PortalHomePage
+          onSubmit={(question) => handlePortalSubmit(question)}
+          submitting={false}
+          onLogin={enterLogin}
+        />
+      </div>
     );
   }
 
@@ -386,11 +420,11 @@ export default function App() {
       {!topCollapsed && (
         <PlatformTopBar
           authState={authUser ? { isLoggedIn: true, ...authUser } : { isLoggedIn: false }}
-          onLogin={() => setMode("login")}
+          onLogin={enterLogin}
           onLogout={logout}
         />
       )}
-      <PlatformNavBar currentFrame={frame} goTo={goTo} topCollapsed={topCollapsed} onToggleTop={() => setTopCollapsed(v => !v)} />
+      <PlatformNavBar currentFrame={frame} goTo={goTo} topCollapsed={topCollapsed} onToggleTop={() => setTopCollapsed(v => !v)} onHome={handleBackToPortal} />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden", background: "#F7F9FC" }}>
 
@@ -406,7 +440,7 @@ export default function App() {
             pendingOdiCount={pendingOdiCount}
             onEnterCompliance={handleEnterCompliance}
             user={authUser}
-            onLogin={() => setMode("login")}
+            onLogin={enterLogin}
           />
         )}
         {(mode === "odi-list" || mode === "odi-project" || mode === "odi-demo") && (
@@ -423,7 +457,7 @@ export default function App() {
             onRename={id => setOdiRenameId(id)}
             onDelete={id => setOdiDeleteId(id)}
             user={authUser}
-            onLogin={() => setMode("login")}
+            onLogin={enterLogin}
           />
         )}
         {mode === "compliance" && (
@@ -441,7 +475,7 @@ export default function App() {
             onRename={handleRenameCompliance}
             onDuplicate={handleDuplicateCompliance}
             user={authUser}
-            onLogin={() => setMode("login")}
+            onLogin={enterLogin}
           />
         )}
 
@@ -453,10 +487,11 @@ export default function App() {
             <>
               {frame === "chat" && (
                 <ChatFrame
-                  key={activeConvId}
+                  key={activeConvId === "new" && chatSeed ? `new-${chatSeed.nonce}` : activeConvId}
                   messages={activeConvId === "new" ? [] : (CONVERSATIONS.find(c => c.id === activeConvId)?.messages) ?? []}
                   onMessagesChange={(msgs) => { /* 实时更新由 ChatFrame 内部管理，预留接口 */ }}
                   onTitleUpdate={(title) => { /* 预留：更新对话标题 */ }}
+                  initialQuestion={activeConvId === "new" && chatSeed ? chatSeed.q : undefined}
                 />
               )}
               {frame === "welcome" && <WelcomeFrame goTo={goTo} onOdiAssistClick={() => setFrame("chat")} />}

@@ -34,9 +34,11 @@ const QUICK_QUESTIONS = [
 interface Props {
   messages: ChatMessage[];
   onMessagesChange: (messages: ChatMessage[]) => void;
+  /** 门户首页携带的问题:挂载后自动发送一次(新对话落地用) */
+  initialQuestion?: string;
 }
 
-export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props) {
+export function ChatFrame({ messages: initialMessages, onMessagesChange, initialQuestion }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [interim, setInterim] = useState("");
@@ -135,6 +137,16 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange }: Props
 
   // 停止生成(中断流式输出,保留已生成部分)
   const stopStream = () => { try { abortRef.current?.abort(); } catch {} };
+
+  // 门户首页携带问题:挂载后自动发送一次(仅一次)
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (initialQuestion && !seededRef.current) {
+      seededRef.current = true;
+      send(initialQuestion);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>

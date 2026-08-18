@@ -5,11 +5,13 @@ interface Props {
   goTo: (f: AppFrame) => void;
   topCollapsed?: boolean;
   onToggleTop?: () => void;
+  /** 点「首页」回门户首页(未提供时维持原 goTo("welcome")) */
+  onHome?: () => void;
 }
 
 const NAV_ITEMS = ["首页", "资讯服务", "办事指南", "金融支持", "专业服务", "培训活动", "一带一路", "境外网点", "安全合规", "项目发布", "留言交流"];
 
-export function PlatformNavBar({ goTo, topCollapsed, onToggleTop }: Props) {
+export function PlatformNavBar({ goTo, topCollapsed, onToggleTop, onHome }: Props) {
   return (
     <div
       style={{
@@ -30,7 +32,7 @@ export function PlatformNavBar({ goTo, topCollapsed, onToggleTop }: Props) {
           return (
             <button
               key={i}
-              onClick={() => isHome ? goTo("welcome") : undefined}
+              onClick={() => isHome ? (onHome ? onHome() : goTo("welcome")) : undefined}
               style={{
                 position: "relative",
                 display: "flex",

@@ -1,0 +1,385 @@
+import { useRef, useState } from "react";
+import cleanBase from "../../imports/image-19.png";
+import xiaohaiBot from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
+
+/**
+ * Portal_Home_Desktop —— 上海市企业走出去综合服务平台首页智能体入口。
+ * 迁移自 Figma 设计源码(出海智能体设计 (最新版) ( AI搜索-gpt)/HomePage.tsx),版式不变。
+ *
+ * image-19 为“干净官网底图”，作为真实背景资产直接使用：城市景观、平台 Logo、
+ * 平台标题、SHANGHAI DESK 均来自底图，绝不重绘。其余元素均为叠加在底图之上的
+ * 可编辑组件：顶部导航、登录辅助入口、左侧资讯卡、右侧浮动按钮、小海机器人、智能输入卡。
+ * 只保留一条蓝色导航、一个平台 Logo/标题（均来自底图）。
+ */
+
+const NAV_ITEMS = [
+  "首页", "资讯服务", "办事指南", "金融支持", "专业服务", "培训活动",
+  "一带一路", "境外网点", "安全合规", "项目发布", "留言交流",
+];
+
+const HOT_QUESTIONS = ["企业出海扶持政策", "ODI备案材料", "新加坡的企业所得税率"];
+
+const WELCOME =
+  "您好，我是小海，欢迎来到上海市企业走出去综合服务平台。我可以为您提供出海政策咨询、办事指南、ODI 备案、国别税策等相关服务。您想咨询哪方面的问题？我将尽力为您解答。";
+
+const PLACEHOLDER = "请输入您想了解的出海问题，例如：ODI 备案需要准备哪些材料？";
+
+const NEWS_CARDS = [
+  {
+    title: "出海选上海",
+    items: [
+      "不靠低价“杀入”中东市场，要靠产品“扎进去”",
+      "中企出海马来西亚，七类“国别事项”须前置考量",
+      "中东出海战略深度观察与合规要点",
+    ],
+  },
+  {
+    title: "热点关注",
+    items: [
+      "中东地区投资合规指引发布",
+      "中东地区贸易合规指引解读",
+      "境外投资制裁应对合规指引",
+    ],
+  },
+];
+
+interface Props {
+  onSubmit: (question: string, source: "custom" | "hot") => void;
+  submitting: boolean;
+  initialDraft?: string;
+  onLogin?: () => void;
+}
+
+export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogin }: Props) {
+  const [value, setValue] = useState(initialDraft);
+  const [focused, setFocused] = useState(false);
+  const [lastSource, setLastSource] = useState<"custom" | "hot">("custom");
+  const [selectedHot, setSelectedHot] = useState<string | null>(null);
+  const [closedCards, setClosedCards] = useState<number[]>([]);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  const hasContent = value.trim().length > 0;
+  // 默认展示欢迎语；点击 / 聚焦 / 有内容后进入输入态
+  const inInput = focused || hasContent;
+
+  const enterInput = () => { setFocused(true); setTimeout(() => taRef.current?.focus(), 0); };
+
+  const handleSend = () => {
+    if (!hasContent || submitting) return;
+    onSubmit(value.trim(), lastSource);
+  };
+
+  const handleHotClick = (q: string) => {
+    setValue(q);              // 仅填入，不直接发送
+    setSelectedHot(q);
+    setLastSource("hot");
+    enterInput();
+  };
+
+  const handleClear = () => {
+    setValue("");
+    setSelectedHot(null);
+    setFocused(false);        // 清空后恢复欢迎语
+  };
+
+  return (
+    <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden", background: "#0b3a7a" }}>
+      {/* ── 干净官网底图（真实背景资产，不重绘 Logo / 标题 / 城市景观） ── */}
+      <img
+        src={cleanBase}
+        alt="上海市企业走出去综合服务平台"
+        style={{
+          position: "absolute", inset: 0, width: "100%", height: "100%",
+          objectFit: "cover", objectPosition: "center top",
+          pointerEvents: "none", userSelect: "none",
+        }}
+        draggable={false}
+      />
+
+      {/* ── 顶部导航（叠加在底图已有蓝色条内，唯一一条导航） ── */}
+      <HeaderNavigation />
+
+      {/* ── 登录 / 繁体 / 无障碍 辅助入口 ── */}
+      <HeaderUtilityLinks onLogin={onLogin} />
+
+      {/* ── 右侧浮动服务按钮 ── */}
+      <FloatingServiceBar />
+
+      {/* ── 左下角门户资讯卡 ── */}
+      <div style={{ position: "absolute", left: "2.5%", bottom: "7%", display: "flex", flexDirection: "column", gap: 12, zIndex: 12, width: "clamp(200px, 15vw, 236px)" }}>
+        {NEWS_CARDS.map((card, i) => !closedCards.includes(i) && (
+          <PortalNewsCard key={card.title} title={card.title} items={card.items} onClose={() => setClosedCards((prev) => [...prev, i])} />
+        ))}
+      </div>
+
+      {/* ── 中央：小海机器人 + 智能输入卡 ── */}
+      <div
+        style={{
+          position: "absolute", left: "50%", bottom: "6%", transform: "translateX(-50%)",
+          width: "clamp(820px, 52%, 1040px)", zIndex: 15,
+        }}
+      >
+        {/* 小海机器人：置于输入卡下层，仅头部从卡片后方露出 */}
+        <img
+          src={xiaohaiBot}
+          alt="小海"
+          draggable={false}
+          style={{
+            position: "absolute", left: "82%", top: -84, transform: "translateX(-50%)",
+            width: "clamp(90px, 7.4vw, 118px)", height: "auto", zIndex: 14,
+            filter: "drop-shadow(0 6px 14px rgba(9,26,60,0.18))",
+            pointerEvents: "none", userSelect: "none",
+          }}
+        />
+
+        {/* HomeQuestionPanel —— 整体式半透明智能服务卡 */}
+        <div
+          onClick={() => !inInput && enterInput()}
+          style={{
+            position: "relative", zIndex: 15, minHeight: 178,
+            background: "rgba(242,247,253,0.92)",
+            border: focused ? "1px solid rgba(37,99,235,0.5)" : "1px solid rgba(255,255,255,0.75)",
+            backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+            borderRadius: 22,
+            boxShadow: focused ? "0 14px 38px rgba(22,66,128,0.22)" : "0 12px 32px rgba(22,66,128,0.16)",
+            padding: "20px 24px 16px", display: "flex", flexDirection: "column",
+            cursor: inInput ? "default" : "text", transition: "border 0.2s, box-shadow 0.2s",
+          }}
+        >
+          {/* 上半部：欢迎语 或 多行输入 */}
+          <div style={{ flex: 1, minHeight: 78 }}>
+            {inInput ? (
+              <textarea
+                ref={taRef}
+                value={value}
+                onChange={(e) => { setValue(e.target.value); setLastSource("custom"); setSelectedHot(null); }}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder={PLACEHOLDER}
+                rows={3}
+                autoFocus
+                style={{
+                  width: "100%", height: "100%", minHeight: 78, border: "none", outline: "none", resize: "none",
+                  background: "transparent", color: "#1a2744",
+                  fontFamily: "'PingFang SC','Microsoft YaHei',sans-serif",
+                  fontSize: "clamp(14px,0.95vw,15px)", lineHeight: 1.7, caretColor: "#1a5bc6",
+                }}
+              />
+            ) : (
+              <p style={{ color: "#33547e", fontSize: "clamp(13px,0.9vw,15px)", lineHeight: 1.8, margin: 0 }}>
+                {WELCOME}
+              </p>
+            )}
+          </div>
+
+          {/* 下半部：热门问题（左） · 清除 + 发送（右） */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 12, color: "#5a7196", marginBottom: 6 }}>热门问题</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {HOT_QUESTIONS.map((q) => {
+                  const sel = selectedHot === q;
+                  return (
+                    <button
+                      key={q}
+                      onClick={(e) => { e.stopPropagation(); handleHotClick(q); }}
+                      style={{
+                        padding: "5px 14px", borderRadius: 8,
+                        border: `1px solid ${sel ? "#2563eb" : "rgba(200,215,235,0.9)"}`,
+                        background: sel ? "rgba(219,234,254,0.85)" : "rgba(255,255,255,0.72)",
+                        color: sel ? "#1a4ca8" : "#3a5a8a", fontSize: 14, cursor: "pointer",
+                        whiteSpace: "nowrap", lineHeight: 1.5, transition: "border 0.15s, background 0.15s", fontFamily: "inherit",
+                      }}
+                      onMouseEnter={(e) => { if (!sel) e.currentTarget.style.borderColor = "#7dabf0"; }}
+                      onMouseLeave={(e) => { if (!sel) e.currentTarget.style.borderColor = "rgba(200,215,235,0.9)"; }}
+                    >{q}</button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleClear(); }}
+                disabled={!hasContent || submitting}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "none", padding: 0,
+                  color: hasContent ? "#5a7196" : "#aebdd0", fontSize: 13,
+                  cursor: hasContent && !submitting ? "pointer" : "default", fontFamily: "inherit",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                </svg>
+                清除
+              </button>
+
+              <button
+                onClick={(e) => { e.stopPropagation(); handleSend(); }}
+                disabled={!hasContent || submitting}
+                aria-label="发送"
+                style={{
+                  width: 52, height: 52, borderRadius: "50%", border: "none", flexShrink: 0,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  background: hasContent ? "linear-gradient(135deg,#1a5bc6 0%,#2d78e8 100%)" : "#c8d8ec",
+                  cursor: hasContent && !submitting ? "pointer" : "default",
+                  boxShadow: hasContent ? "0 4px 14px rgba(37,99,235,0.32)" : "none",
+                  transition: "transform 0.15s, background 0.2s, box-shadow 0.2s",
+                }}
+                onMouseDown={(e) => { if (hasContent && !submitting) e.currentTarget.style.transform = "scale(0.92)"; }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+              >
+                {submitting ? <Spinner /> : (
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 8.5L14 2L8.5 14L7 9.5L2 8.5Z" fill="white" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── HeaderNavigation ── */
+function HeaderNavigation() {
+  const [hover, setHover] = useState<string | null>(null);
+  return (
+    <nav
+      style={{
+        position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
+        height: "clamp(38px, 4.2vh, 52px)", width: "66%",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        zIndex: 20, gap: "0.5vw",
+      }}
+    >
+      {NAV_ITEMS.map((item) => {
+        const active = item === "首页";
+        const isHover = hover === item;
+        return (
+          <div
+            key={item}
+            onMouseEnter={() => setHover(item)}
+            onMouseLeave={() => setHover(null)}
+            style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", padding: "0 2px" }}
+          >
+            <span style={{
+              color: active || isHover ? "#ffffff" : "rgba(255,255,255,0.86)",
+              fontSize: "clamp(13px, 0.92vw, 17px)", fontWeight: active ? 600 : 400,
+              whiteSpace: "nowrap", transition: "color 0.15s", textShadow: "0 1px 2px rgba(0,0,0,0.15)",
+            }}>{item}</span>
+            {active && (
+              <span style={{ position: "absolute", bottom: -7, width: "70%", height: 2.5, borderRadius: 2, background: "#cfe4ff" }} />
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+/* ── HeaderUtilityLinks ── */
+function HeaderUtilityLinks({ onLogin }: { onLogin?: () => void }) {
+  return (
+    <div style={{
+      position: "absolute", top: "calc(clamp(38px,4.2vh,52px) + 30px)", right: "9%",
+      display: "flex", alignItems: "center", gap: 10, zIndex: 20,
+    }}>
+      {["登录", "繁体", "无障碍"].map((t, i) => (
+        <div key={t} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {i > 0 && <span style={{ width: 1, height: 11, background: "rgba(255,255,255,0.5)" }} />}
+          <button
+            onClick={t === "登录" ? onLogin : undefined}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.9)", fontSize: 12.5, fontFamily: "inherit", padding: 0, textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.9)")}
+          >{t}</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── FloatingServiceBar ── */
+function FloatingServiceBar() {
+  const icons: { key: string; svg: React.ReactNode }[] = [
+    { key: "consult", svg: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /> },
+    { key: "mobile", svg: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" /></> },
+    { key: "share", svg: <><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" /></> },
+    { key: "top", svg: <path d="M18 15l-6-6-6 6" /> },
+  ];
+  return (
+    <div style={{
+      position: "absolute", right: "clamp(48px, 4vw, 72px)", top: "50%", transform: "translateY(-50%)",
+      display: "flex", flexDirection: "column", gap: 16, zIndex: 18,
+    }}>
+      {icons.map((ic) => (
+        <button
+          key={ic.key}
+          style={{
+            width: "clamp(48px,3.4vw,60px)", height: "clamp(48px,3.4vw,60px)", borderRadius: "50%", border: "none", cursor: "pointer",
+            background: "linear-gradient(135deg,#2f7be0,#1a5bc6)", display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 4px 12px rgba(26,64,140,0.28)", transition: "transform 0.15s, box-shadow 0.15s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(26,64,140,0.4)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(26,64,140,0.28)"; }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            {ic.svg}
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ── PortalNewsCard ── */
+function PortalNewsCard({ title, items, onClose }: { title: string; items: string[]; onClose: () => void }) {
+  return (
+    <div
+      style={{ borderRadius: 8, overflow: "hidden", background: "#fff", boxShadow: "0 2px 10px rgba(9,26,60,0.14)", transition: "box-shadow 0.15s" }}
+      onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 6px 18px rgba(9,26,60,0.22)")}
+      onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 2px 10px rgba(9,26,60,0.14)")}
+    >
+      {/* 蓝色标题栏 + 火焰图标 + 关闭按钮 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", background: "linear-gradient(90deg,#1a5bc6,#2d78e8)" }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#ffc234" style={{ flexShrink: 0 }}>
+          <path d="M12 2c1 3-1 5-2 6.5C8.5 10.5 8 12 8 13.5a4 4 0 0 0 8 0c0-1-.3-2-1-3 .5 2-1 3-1 3 .3-2-1-3.5-2-5 1.5 1 1 3 1 3 1-1.5 2-3 0-6.5-.5 2-2 3-2 3s2-3 1-6z" />
+        </svg>
+        <span style={{ flex: 1, color: "#fff", fontSize: 13, fontWeight: 600 }}>{title}</span>
+        <button
+          onClick={onClose}
+          aria-label="关闭"
+          style={{ width: 16, height: 16, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.25)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, padding: 0 }}
+        >
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 1l6 6M7 1l-6 6" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" /></svg>
+        </button>
+      </div>
+      {/* 蓝色圆点列表 */}
+      <div style={{ padding: "8px 10px", background: "#fbfcfe" }}>
+        {items.map((it) => (
+          <div key={it} style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "4px 0", cursor: "pointer" }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2563eb", flexShrink: 0, marginTop: 6 }} />
+            <span style={{
+              fontSize: 12, color: "#3a4f6b", lineHeight: 1.5,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0,
+            }}>{it}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ animation: "spin 0.7s linear infinite" }}>
+      <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.35)" strokeWidth="3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
