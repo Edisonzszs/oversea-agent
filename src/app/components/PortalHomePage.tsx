@@ -88,12 +88,6 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
     enterInput();
   };
 
-  const handleClear = () => {
-    setValue("");
-    setSelectedHot(null);
-    setFocused(false);        // 清空后恢复欢迎语
-  };
-
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden", background: "#0b3a7a" }}>
       {/* ── 干净官网底图（真实背景资产，不重绘 Logo / 标题 / 城市景观） ── */}
@@ -188,7 +182,7 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
             )}
           </div>
 
-          {/* 下半部：热门问题（左） · 语音 + 清除 + 发送（右） */}
+          {/* 下半部：热门问题（左） · 语音 + 发送（右，清除已删由用户手动删改） */}
           <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 12, color: "#5a7196", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -216,31 +210,8 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
               </div>
             </div>
 
-            {/* 操作区:清除 · 麦克风 · 发送,统一 44px 圆钮 */}
+            {/* 操作区:麦克风 · 发送,统一 44px 圆钮(清除已删,用户手动删改即可) */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleClear(); }}
-                disabled={!hasContent || submitting}
-                title="清除" aria-label="清除"
-                style={{
-                  width: 44, height: 44, borderRadius: "50%", border: "none", flexShrink: 0, padding: 0,
-                  background: "#e8edf5",
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  cursor: hasContent && !submitting ? "pointer" : "default",
-                  opacity: hasContent || submitting ? 1 : 0.55,
-                  transition: "background .15s, transform 0.15s, opacity 0.2s",
-                }}
-                onMouseEnter={e => { if (hasContent && !submitting) e.currentTarget.style.background = "#dde4f0"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "#e8edf5"; }}
-                onMouseDown={(e) => { if (hasContent && !submitting) e.currentTarget.style.transform = "scale(0.92)"; }}
-                onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#e8edf5"; e.currentTarget.style.transform = "scale(1)"; }}
-              >
-                <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={hasContent ? "#5a7196" : "#aebdd0"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                </svg>
-              </button>
-
               {voice.listening ? (
                 <DictationControls size="md" onConfirm={voice.confirm} onCancel={voice.cancel} />
               ) : (
