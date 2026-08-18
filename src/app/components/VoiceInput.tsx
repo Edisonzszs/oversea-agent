@@ -16,6 +16,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import gsap from "gsap";
 import { DUR, EASE } from "../motion/tokens";
 import { C } from "../compliance/complianceTheme";
+import { VoiceGlyph, SendUpGlyph } from "./BrandIcons";
 
 // Web Speech API 类型声明
 interface SpeechRecognitionType {
@@ -293,17 +294,6 @@ export function RecordingBar({ elapsed, sessionText = "", interim, meterRef, com
   );
 }
 
-// ─── 实心麦克风图标(胶囊机身 + 弧形支架) ────────────────────────────────────
-function MicGlyph({ size, color }: { size: number; color: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-      <rect x="6" y="1.7" width="4" height="7.3" rx="2" fill={color} />
-      <path d="M3.8 7.6a4.2 4.2 0 0 0 8.4 0" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M8 11.8v2M5.7 14h4.6" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 // ─── 麦克风按钮(md=34px 首页 / sm=22px 伴填,热区已保证) ──────────────────────
 // supported=false 时仍渲染按钮(探测可能因双模块实例/环境差异失灵),点击时提示不支持。
 // 听写中的停止/取消/确认由 DictationControls 负责,本按钮只在待听写时渲染。
@@ -324,7 +314,7 @@ export function MicButton({ supported, onClick, size = "md" as "md" | "sm" }: {
       }}
       onMouseEnter={e => { e.currentTarget.style.background = "#dde4f0"; }}
       onMouseLeave={e => { e.currentTarget.style.background = "#e8edf5"; }}>
-      <MicGlyph size={icon} color="#64748b" />
+      <VoiceGlyph size={icon} color="#64748b" />
     </button>
   );
 }
@@ -398,9 +388,7 @@ export function SendButton({ disabled, loading, onClick, onStop, size = "md" as 
       title={stopping ? "停止生成" : title} aria-label={stopping ? "停止生成" : title}
       style={{
         width: box, height: box, borderRadius: "50%", flexShrink: 0, border: "none",
-        background: stopping ? "#1a5bc6"
-          : active ? (size === "sm" ? "#1a5bc6" : "linear-gradient(135deg,#1a5bc6,#2d78e8)")
-          : (size === "sm" ? "#d1d9e6" : "#c8daf0"),
+        background: stopping ? "#1a5bc6" : "transparent",
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: interactive ? "pointer" : "default",
         transition: "background .15s",
@@ -410,17 +398,17 @@ export function SendButton({ disabled, loading, onClick, onStop, size = "md" as 
         // 生成中:停止符(白色方块,ChatGPT 式)
         <span style={{ width: size === "sm" ? 11 : 12, height: size === "sm" ? 11 : 12, borderRadius: 2, background: "#fff" }} />
       ) : loading ? (
-        // loading:旋转圆环 spinner
+        // loading:旋转圆环 spinner(按钮底透明,环体品牌蓝)
         <span style={{
           width: size === "sm" ? 13 : 15, height: size === "sm" ? 13 : 15, borderRadius: "50%",
-          border: "2px solid rgba(255,255,255,0.35)", borderTopColor: "#fff",
+          border: "2px solid rgba(26,91,198,0.25)", borderTopColor: "#1a5bc6",
           display: "inline-block", animation: "sendSpin .7s linear infinite",
         }}>
           <style>{`@keyframes sendSpin{to{transform:rotate(360deg)}}`}</style>
         </span>
       ) : (
-        // 向上箭头(ChatGPT 式,大小号统一)
-        <svg width={size === "sm" ? 15 : 16} height={size === "sm" ? 15 : 16} viewBox="0 0 16 16" fill="none"><path d="M8 12.5V3.5M8 3.5L4.2 7.3M8 3.5l3.8 3.8" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        // 官方发送图标(向上·发送 4-copy.svg):实心圆自带底,禁用灰/可发送蓝
+        <SendUpGlyph size={box} color={active ? "#1a5bc6" : (size === "sm" ? "#d1d9e6" : "#c8daf0")} />
       )}
     </button>
   );

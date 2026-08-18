@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import cleanBase from "../../imports/portal-base.png";
 import seggLockup from "../../imports/segg-lockup.png";
 import xiaohaiBot from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
+import { SendUpGlyph } from "./BrandIcons";
 
 /**
  * Portal_Home_Desktop —— 上海市企业出海综合服务平台首页智能体入口。
@@ -171,7 +172,7 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
                 autoFocus
                 style={{
                   width: "100%", height: "78px", border: "none", outline: "none", resize: "none",
-                  background: "transparent", color: "#1a2744",
+                  background: "transparent", color: "#000000",
                   fontFamily: PORTAL_FONT,
                   fontSize: "clamp(14px,0.95vw,15px)", lineHeight: 1.7, caretColor: "#1a5bc6",
                 }}
@@ -230,21 +231,19 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
                 disabled={!hasContent || submitting}
                 aria-label="发送"
                 style={{
-                  width: 52, height: 52, borderRadius: "50%", border: "none", flexShrink: 0,
+                  width: 52, height: 52, border: "none", flexShrink: 0, background: "transparent", padding: 0,
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  background: hasContent ? "linear-gradient(135deg,#1a5bc6 0%,#2d78e8 100%)" : "#c8d8ec",
                   cursor: hasContent && !submitting ? "pointer" : "default",
-                  boxShadow: hasContent ? "0 4px 14px rgba(37,99,235,0.32)" : "none",
-                  transition: "transform 0.15s, background 0.2s, box-shadow 0.2s",
+                  transition: "transform 0.15s",
                 }}
                 onMouseDown={(e) => { if (hasContent && !submitting) e.currentTarget.style.transform = "scale(0.92)"; }}
                 onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
               >
                 {submitting ? <Spinner /> : (
-                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 8.5L14 2L8.5 14L7 9.5L2 8.5Z" fill="white" />
-                  </svg>
+                  <SendUpGlyph size={52}
+                    color={hasContent ? "#1a5bc6" : "#c8d8ec"}
+                    style={hasContent ? { filter: "drop-shadow(0 4px 10px rgba(37,99,235,0.35))" } : undefined} />
                 )}
               </button>
             </div>
@@ -327,7 +326,7 @@ function HeroLockup() {
       alt="上海市企业出海综合服务平台"
       draggable={false}
       style={{
-        position: "absolute", top: "clamp(72px, 11.5vh, 132px)", left: "50%", transform: "translateX(-50%)",
+        position: "absolute", top: "clamp(140px, 25vh, 270px)", left: "50%", transform: "translateX(-50%)",
         width: "clamp(400px, 42vw, 640px)", height: "auto", zIndex: 12,
         filter: "drop-shadow(0 3px 10px rgba(13,54,116,0.18))",
         pointerEvents: "none", userSelect: "none",
