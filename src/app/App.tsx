@@ -630,7 +630,8 @@ export default function App() {
         </div>
 
         {/* Right panel */}
-        {mode === "xiaohai" && !isDaibanMain && (
+        {/* 右侧网站搜索栏:仅存在搜索关键词(门户带词/显式搜站)时渲染,智能体直达与平台内新建对话不出现 */}
+        {mode === "xiaohai" && !isDaibanMain && searchKeyword.trim() !== "" && (
           <ContextWorkspace
             collapsed={rightCollapsed}
             onToggleCollapse={() => setRightCollapsed(v => !v)}
