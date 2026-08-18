@@ -75,6 +75,23 @@ describe("materialDocs — 材料模拟原文", () => {
     expect(fdLine.includes("越南·胡志明市")).toBe(false); // 分栏后不再连续
     expect(commerce.lines.some(l => l.includes("国家（地区）：越南"))).toBe(true);
   });
+
+  it("Word 表格复刻:备案表/商务备案表提供 rows 结构,行数与 lines 一致,含合并单元格", () => {
+    const docs = buildMaterialDocs(seedAssistFieldPool(false), DEMO_CONTRIBUTION_ROWS);
+    const filing = docs.find(d => d.material === "备案表")!;
+    const commerce = docs.find(d => d.material === "商务备案表")!;
+    expect(filing.rows!.length).toBe(filing.lines.length);
+    expect(commerce.rows!.length).toBe(commerce.lines.length);
+    expect(commerce.colWidths!.length).toBe(4); // 4 列网格
+    // 左侧栏目列合并单元格(境内投资主体 rowSpan4 / 股权结构 rowSpan4 / 构成 rowSpan2)
+    const labelCells = commerce.rows!.flat().filter(c => c.rowSpan && c.rowSpan > 1);
+    expect(labelCells.some(c => c.text === "境内投资主体" && c.rowSpan === 4)).toBe(true);
+    expect(labelCells.some(c => c.text === "股权结构" && c.rowSpan === 4)).toBe(true);
+    expect(labelCells.some(c => c.text === "中方投资的构成（单位：万美元）" && c.rowSpan === 2)).toBe(true);
+    // 信函式文档(承诺书/请示)仍是行式,无表格
+    expect(docs.find(d => d.material === "承诺书")!.rows).toBeUndefined();
+    expect(docs.find(d => d.material === "请示")!.rows).toBeUndefined();
+  });
 });
 
 describe("定位算法", () => {

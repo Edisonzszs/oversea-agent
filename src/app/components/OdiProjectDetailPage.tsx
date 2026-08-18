@@ -13,7 +13,7 @@ import type { AssistantContext } from "./OdiProjectAssistantPanel";
 import { getIssues, type ValidationCheck, type ValidationResult } from "../odi/validation/odiValidationEngine";
 import { validateOdiFull } from "../odi/validation/odiNdrcRules";
 import { RULE_EVIDENCE_REFS, defaultMaterialFor, hasEvidenceRefs } from "../odi/validation/evidenceRefs";
-import { buildMaterialDocs, lineHitsValue, type MaterialDoc } from "../odi/doc/materialDocs";
+import { buildMaterialDocs, lineHitsValue, type DocCell, type MaterialDoc } from "../odi/doc/materialDocs";
 import { allFieldDefs } from "../odi/field/odiFieldCatalog";
 import type { OdiField, OdiMaterialKey } from "../odi/data/types";
 
@@ -285,21 +285,53 @@ function EvidenceDrawer({ check, docs, pool, onClose }: {
                 {!wholeDoc && hitLines.length === 0 && (
                   <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 8 }}>未在本文档原文中定位到证据值（{values.map(v => (v.length > 24 ? `${v.slice(0, 24)}…` : v)).join(" / ")}）</div>
                 )}
-                <div style={{ border: "1px solid #e8edf5", borderRadius: 10, overflow: "hidden", background: "#fbfcfe" }}>
-                  {(doc?.lines ?? ["（文档未生成）"]).map((line, i) => {
-                    const isHit = hitLines.includes(i);
-                    return (
-                      <div key={i} style={{
-                        padding: "5px 12px", fontSize: 12, lineHeight: 1.7, color: isHit ? "#1f2937" : "#64748b",
-                        background: isHit ? lineColors.rowBg : "transparent",
-                        borderLeft: isHit ? `3px solid ${lineColors.rowBorder}` : "3px solid transparent",
-                        whiteSpace: "pre-wrap", wordBreak: "break-all",
-                      }}>
-                        {isHit ? <MarkedLine line={line} values={values} bad={bad} /> : line}
-                      </div>
-                    );
-                  })}
-                </div>
+                {doc?.rows ? (
+                  /* Word 表格复刻:边框表格 + 栏目列灰底 + 合并单元格;命中行整行着色、命中格内标记 */
+                  <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", background: "#fff" }}>
+                    {doc.colWidths && <colgroup>{doc.colWidths.map((w, ci) => <col key={ci} style={{ width: w }} />)}</colgroup>}
+                    <tbody>
+                      {doc.rows.map((row, ri) => {
+                        const isHit = hitLines.includes(ri);
+                        return (
+                          <tr key={ri}>
+                            {row.map((cell: DocCell, ci) => (
+                              <td key={ci} colSpan={cell.span} rowSpan={cell.rowSpan} style={{
+                                border: "1px solid #c3cddc", padding: "5px 9px",
+                                fontSize: cell.kind === "title" ? 14.5 : 12, lineHeight: 1.7, verticalAlign: "top",
+                                fontWeight: cell.kind === "head" || cell.kind === "title" ? 700 : 400,
+                                color: cell.kind === "note" ? "#94a3b8" : "#334155",
+                                background: isHit ? lineColors.rowBg : cell.kind === "label" || cell.kind === "head" ? "#f1f5f9" : "#fff",
+                                textAlign: cell.align === "center" ? "center" : cell.align === "right" ? "right" : "left",
+                                boxShadow: isHit ? `inset 3px 0 0 ${lineColors.rowBorder}` : undefined,
+                                whiteSpace: "pre-wrap", wordBreak: "break-all",
+                              }}>
+                                {(cell.lines ?? (cell.text != null ? [cell.text] : [""])).map((l, li) => (
+                                  <div key={li}>{isHit ? <MarkedLine line={l} values={values} bad={bad} /> : l}</div>
+                                ))}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div style={{ border: "1px solid #e8edf5", borderRadius: 10, overflow: "hidden", background: "#fbfcfe" }}>
+                    {(doc?.lines ?? ["（文档未生成）"]).map((line, i) => {
+                      const isHit = hitLines.includes(i);
+                      return (
+                        <div key={i} style={{
+                          padding: "5px 12px", fontSize: 12, lineHeight: 1.7, color: isHit ? "#1f2937" : "#64748b",
+                          background: isHit ? lineColors.rowBg : "transparent",
+                          borderLeft: isHit ? `3px solid ${lineColors.rowBorder}` : "3px solid transparent",
+                          whiteSpace: "pre-wrap", wordBreak: "break-all",
+                        }}>
+                          {isHit ? <MarkedLine line={line} values={values} bad={bad} /> : line}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
