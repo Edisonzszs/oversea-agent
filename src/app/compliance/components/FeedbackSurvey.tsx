@@ -1,7 +1,8 @@
-// 使用反馈问卷 —— 右下角 FAB + 全屏浮层问卷(速测版/完整版共用)。
+// 使用反馈问卷 —— 页头行内入口按钮 + 全屏浮层问卷(速测版/完整版共用)。
 // 文案与流程照 20260813 交付稿「对外文案总表」第三章改版后口径:
 //   身份 4 选项 / 10 项打分(5-1,可备注) / 6 道开放题 / 生成反馈意见 → 复制反馈内容。
 // 填写内容在组件实例 state,关闭再打开不丢;浮层 createPortal 到 body 防裁切。
+// (入口原为右下角 FAB,与底部"开始自查/下一步"导航重叠,移至页头行内。)
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -32,12 +33,7 @@ const FB_OPEN = [
 ];
 const FB_ROLES = ["拟申报企业经办人", "已备案企业经办人", "专业服务机构人员", "其他"];
 
-interface Props {
-  /** FAB 距右边缘(px)——默认 24;嵌伴填栏的页面传 384 避让 */
-  right?: number;
-}
-
-export function FeedbackFab({ right = 24 }: Props) {
+export function FeedbackFab() {
   const [open, setOpen] = useState(false);
   useEscapeClose(open ? () => setOpen(false) : null); // 浮层打开时 Esc 关闭(内容保留)
   // 问卷数据(实例级:关闭再开不丢)
@@ -91,18 +87,18 @@ export function FeedbackFab({ right = 24 }: Props) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  return createPortal(
+  return (
     <>
-      {/* FAB */}
+      {/* 入口按钮:页头行内胶囊(不与底部导航/内容重叠,随页头常驻) */}
       <button onClick={() => setOpen(true)} title="使用反馈问卷"
-        style={{ position: "fixed", right, bottom: 24, zIndex: 9000, background: C.primary, color: "#fff", border: "none", borderRadius: 28, padding: "12px 22px", fontSize: 15, fontWeight: 700, boxShadow: "0 4px 16px rgba(26,91,198,0.42)", cursor: "pointer", display: "inline-flex", alignItems: "center", transition: "background .15s", fontFamily: "inherit" }}
-        onMouseEnter={e => (e.currentTarget.style.background = C.primaryHover)} onMouseLeave={e => (e.currentTarget.style.background = C.primary)}>
-        <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f0a020", marginRight: 8 }} />
+        style={{ flexShrink: 0, background: C.primaryBg, color: C.primary, border: `1px solid ${C.primaryBorder}`, borderRadius: 18, padding: "7px 16px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", fontFamily: "inherit", transition: "border-color .15s, background .15s" }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = C.primary; e.currentTarget.style.background = "#e6effb"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = C.primaryBorder; e.currentTarget.style.background = C.primaryBg; }}>
+        <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#f0a020", marginRight: 7 }} />
         反馈问卷
       </button>
 
       {/* 浮层 */}
-      {open && (
+      {open && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 10030, background: "rgba(15,23,42,0.45)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: 24, overflow: "auto", fontFamily: '"Microsoft YaHei","PingFang SC",sans-serif' }}>
           <div style={{ background: "#fff", maxWidth: 900, width: "100%", borderRadius: 14, boxShadow: "0 12px 44px rgba(0,0,0,0.3)", margin: "auto", display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 48px)" }}
             onClick={e => e.stopPropagation()}>
@@ -187,9 +183,8 @@ export function FeedbackFab({ right = 24 }: Props) {
             </div>
           </div>
         </div>
-      )}
-    </>,
-    document.body,
+      , document.body)}
+    </>
   );
 }
 

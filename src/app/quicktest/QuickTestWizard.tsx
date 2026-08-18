@@ -114,6 +114,8 @@ export function QuickTestWizard({ onUpgrade, onBackHome }: Props) {
           </div>
           <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>无需登录 · 约 10-15 分钟 · 输出 ABCD 判档与建议材料（匿名作答仅存本页，关闭后不保留）</div>
         </div>
+        {/* 使用反馈问卷入口(页头行内;原右下 FAB 与"开始自查/下一步"重叠) */}
+        <FeedbackFab />
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
@@ -178,8 +180,6 @@ export function QuickTestWizard({ onUpgrade, onBackHome }: Props) {
           </div>
           </InstantQAContext.Provider>
           </CopilotAskContext.Provider>
-          {/* 使用反馈问卷 FAB(步骤 0-6 随时可点;right 384 避让右侧伴填栏;报告步不显示) */}
-          {step < 7 && <FeedbackFab right={384} />}
         </div>
 
         {/* 右侧:沪航者·合规伴填(与完整版同一面板) */}

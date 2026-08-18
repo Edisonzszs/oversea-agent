@@ -133,6 +133,8 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
         {tab === "wizard" && (
           <button onClick={() => { if (window.confirm("确定清空所有作答、重新开始？项目名称保留。")) handleClearAnswers(); }} title="清空全部作答数据" style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "transparent", color: C.bad, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>清空作答</button>
         )}
+        {/* 使用反馈问卷入口(页头行内;原右下 FAB 与底部导航重叠) */}
+        <FeedbackFab />
         <div style={{ display: "flex", background: C.lineSoft, borderRadius: 8, padding: 3, gap: 2, flexShrink: 0 }}>
           {([["wizard", "自查向导"], ["report", "自查报告"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)} style={{ padding: "6px 15px", borderRadius: 6, border: "none", background: tab === k ? "#fff" : "transparent", color: tab === k ? C.primary : C.sub, fontWeight: tab === k ? 600 : 400, fontSize: 12.5, cursor: "pointer", boxShadow: tab === k ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all .15s" }}>{label}</button>
@@ -210,8 +212,6 @@ export function ComplianceDetailPage({ project, onUpdate, onBack }: Props) {
           onInstantQAConsumed={() => setInstantQA(null)}
         />
       </div>
-      {/* 使用反馈问卷 FAB(填写向导期间随时可点;right 384 避让右侧伴填栏) */}
-      {tab === "wizard" && <FeedbackFab right={384} />}
     </div>
   );
 }
