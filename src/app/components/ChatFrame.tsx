@@ -36,9 +36,11 @@ interface Props {
   onMessagesChange: (messages: ChatMessage[]) => void;
   /** 门户首页携带的问题:挂载后自动发送一次(新对话落地用) */
   initialQuestion?: string;
+  /** 用户发出消息(含携带问题自动发送):App 层据此识别「帮忙搜索网站」等显式请求 */
+  onUserMessage?: (text: string) => void;
 }
 
-export function ChatFrame({ messages: initialMessages, onMessagesChange, initialQuestion }: Props) {
+export function ChatFrame({ messages: initialMessages, onMessagesChange, initialQuestion, onUserMessage }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [interim, setInterim] = useState("");
@@ -64,6 +66,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
     const newMsgs = [...messages, { role: "user" as const, text }];
     setMessages(newMsgs);
     onMessagesChange(newMsgs);
+    onUserMessage?.(text);
 
     setLoading(true);
     setThinkText(""); setAnswerText(""); setPhase("thinking"); setThinkOpen(true);

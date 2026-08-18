@@ -61,6 +61,9 @@ export default function App() {
   const [mode, setMode] = useState<AppMode>("portal");
   // 门户首页 → 平台的携带问题(新对话落地自动发送);nonce 保证每次都重挂 ChatFrame
   const [chatSeed, setChatSeed] = useState<{ q: string; nonce: number } | null>(null);
+  // 网站搜索关键词(走出去平台 segg.sh.gov.cn 常规搜索,非 AI 搜索):
+  // 由门户首页带入,或对话中明确的「帮忙搜索网站」请求刷新;其余对话过程保持不变
+  const [searchKeyword, setSearchKeyword] = useState<string>("");
   // 登录往返:从门户/平台进登录页,成功或返回时回原处
   const [loginReturnMode, setLoginReturnMode] = useState<Exclude<AppMode, "login">>("xiaohai");
 
@@ -126,9 +129,11 @@ export default function App() {
 
   // ── Navigation handlers ──
 
-  // 门户首页提交:携带问题落到小海新对话(自动发送),进平台态
+  // 门户首页提交:携带问题落到小海新对话(自动发送),右侧展示该词的网站搜索结果
   const handlePortalSubmit = (question: string) => {
     setChatSeed({ q: question, nonce: Date.now() });
+    setSearchKeyword(question);
+    setRightCollapsed(false); // 落地即展示网站搜索结果
     setActiveConvId("new");
     setMode("xiaohai");
     setFrame("chat");
@@ -140,9 +145,31 @@ export default function App() {
   // 门户右侧浮动栏「智能体」:直达出海智能体界面(新对话,不携带问题)
   const handleEnterAgent = () => {
     setChatSeed(null);
+    setSearchKeyword("");
     setActiveConvId("new");
     setMode("xiaohai");
     setFrame("chat");
+  };
+
+  // ── 网站搜索(segg.sh.gov.cn)重搜:仅在用户明确要求「帮忙搜索网站」时刷新关键词 ──
+  const isWebsiteSearchRequest = (text: string) =>
+    /(搜索|搜一下|搜搜|查一下|查查|检索)/.test(text) && /(网站|官网|平台|网上|segg)/i.test(text);
+
+  /** 从请求语剥离客套/指令词,提取检索词;剥完为空回退整句 */
+  const extractSearchKeyword = (text: string): string => {
+    let k = text;
+    k = k.replace(/(请|麻烦|帮我|帮忙|给我|麻烦你|让你|再|重新|一下)/g, "");
+    k = k.replace(/(在|去|到)?(网站|官网|平台上?|网上|segg\.sh\.gov\.cn)的?/gi, "");
+    k = k.replace(/(搜索|搜一下|搜搜|查一下|查查|检索)/g, "");
+    k = k.replace(/[\s，。？！、,.?！?]+/g, " ").trim();
+    return k || text.trim();
+  };
+
+  const handleChatUserMessage = (text: string) => {
+    if (isWebsiteSearchRequest(text)) {
+      setSearchKeyword(extractSearchKeyword(text));
+      setRightCollapsed(false);
+    }
   };
 
   // 统一登录入口:记录当前模式,登录成功/返回时回原处(合规"完整版→去登录"走自己的 pending 流程)
@@ -363,6 +390,7 @@ export default function App() {
   const handleSelectConversation = (id: string) => {
     setActiveConvId(id);
     setChatSeed(null); // 切走即清携带问题,避免残留 seed 影响后续新对话
+    setSearchKeyword("");
     setMode("xiaohai");
     setFrame("chat");
   };
@@ -370,6 +398,7 @@ export default function App() {
   const handleNewConversation = () => {
     setActiveConvId("new");
     setChatSeed(null);
+    setSearchKeyword("");
     setMode("xiaohai");
     setFrame("chat");
   };
@@ -501,6 +530,7 @@ export default function App() {
                   onMessagesChange={(msgs) => { /* 实时更新由 ChatFrame 内部管理，预留接口 */ }}
                   onTitleUpdate={(title) => { /* 预留：更新对话标题 */ }}
                   initialQuestion={activeConvId === "new" && chatSeed ? chatSeed.q : undefined}
+                  onUserMessage={handleChatUserMessage}
                 />
               )}
               {frame === "welcome" && <WelcomeFrame goTo={goTo} onOdiAssistClick={() => setFrame("chat")} />}
@@ -604,6 +634,7 @@ export default function App() {
           <ContextWorkspace
             collapsed={rightCollapsed}
             onToggleCollapse={() => setRightCollapsed(v => !v)}
+            searchKeyword={searchKeyword}
           />
         )}
         {mode === "odi-project" && activeProject?.serviceType === "assist" && (
