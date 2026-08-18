@@ -430,10 +430,10 @@ export default function App() {
     );
   }
 
-  // 门户首页(走出去服务平台):底图 + 智能输入卡,全屏独立渲染,不带平台外壳
+  // 门户首页(出海服务平台):底图 + 智能输入卡,全屏独立渲染,不带平台外壳(思源黑体口径同官网)
   if (mode === "portal") {
     return (
-      <div style={{ height: "100vh", width: "100%", overflow: "hidden", fontFamily: "'PingFang SC','Microsoft YaHei','Hiragino Sans GB',sans-serif" }}>
+      <div style={{ height: "100vh", width: "100%", overflow: "hidden", fontFamily: "'Source Han Sans SC','Source Han Sans','Noto Sans SC','PingFang SC','Microsoft YaHei','Hiragino Sans GB',sans-serif" }}>
         <PortalHomePage
           onSubmit={(question) => handlePortalSubmit(question)}
           submitting={false}

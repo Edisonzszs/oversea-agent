@@ -1,17 +1,21 @@
 import { useRef, useState } from "react";
 import cleanBase from "../../imports/portal-base.png";
-import shanghaiLogo from "../../imports/shanghai-logo.png";
+import seggLockup from "../../imports/segg-lockup.png";
 import xiaohaiBot from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
 
 /**
  * Portal_Home_Desktop —— 上海市企业出海综合服务平台首页智能体入口。
- * 迁移自 Figma 设计源码(HomePage.tsx)并按新底图重构叠加层。
+ * 版式对齐官网 segg.sh.gov.cn：思源黑体(Source Han Sans)字族、官方标题锁版图
+ * (segg-lockup.png,透明底藏青 #00479C)、导航选中/hover = 底部 3px 白色下划线
+ * (透明下划线占位,无布局跳动,口径同官网 index-style.css)。
  *
  * portal-base.png 为"干净官网底图"（城市景观 + 顶部纯色蓝条 ~7vh，无导航/标题/Logo 烤入）。
- * 顶端导航（叠在蓝条内）、中部平台标题锁版（上海 Logo + SHANGHAI DESK + 平台名）、
- * 登录辅助入口（蓝条右侧）、左侧资讯卡、右侧浮动按钮、沪航者机器人、智能输入卡
- * 均为叠加在底图之上的可编辑组件。
+ * 顶端导航、标题锁版、登录辅助入口、左侧资讯卡、右侧浮动按钮、沪航者机器人、
+ * 智能输入卡均为叠加在底图之上的可编辑组件。
  */
+
+/** 官网字族:思源黑体优先(官网 index-style.css 口径),本机无则回退苹方/雅黑 */
+const PORTAL_FONT = "'Source Han Sans SC','Source Han Sans','Noto Sans SC','PingFang SC','Microsoft YaHei','Hiragino Sans GB',sans-serif";
 
 const NAV_ITEMS = [
   "首页", "资讯服务", "办事指南", "金融支持", "专业服务", "培训活动",
@@ -168,7 +172,7 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
                 style={{
                   width: "100%", height: "78px", border: "none", outline: "none", resize: "none",
                   background: "transparent", color: "#1a2744",
-                  fontFamily: "'PingFang SC','Microsoft YaHei',sans-serif",
+                  fontFamily: PORTAL_FONT,
                   fontSize: "clamp(14px,0.95vw,15px)", lineHeight: 1.7, caretColor: "#1a5bc6",
                 }}
               />
@@ -251,7 +255,7 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
   );
 }
 
-/* ── HeaderNavigation：叠在底图顶部蓝条内(蓝条 ~7vh) ── */
+/* ── HeaderNavigation：叠在底图顶部蓝条内,选中/hover=底部3px白色下划线(官网口径) ── */
 const NAV_BAR_H = "clamp(38px, 6.6vh, 64px)";
 
 function HeaderNavigation() {
@@ -261,8 +265,8 @@ function HeaderNavigation() {
       style={{
         position: "absolute", top: 0, left: "46%", transform: "translateX(-50%)",
         height: NAV_BAR_H, width: "58%",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        zIndex: 20, gap: "0.4vw",
+        display: "flex", alignItems: "stretch", justifyContent: "space-between",
+        zIndex: 20, gap: "0.4vw", fontFamily: PORTAL_FONT,
       }}
     >
       {NAV_ITEMS.map((item) => {
@@ -273,16 +277,18 @@ function HeaderNavigation() {
             key={item}
             onMouseEnter={() => setHover(item)}
             onMouseLeave={() => setHover(null)}
-            style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", padding: "0 2px" }}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              padding: "0 2px",
+              borderBottom: active || isHover ? "3px solid #ffffff" : "3px solid transparent",
+              marginBottom: -1.5, transition: "border-color 0.15s",
+            }}
           >
             <span style={{
-              color: active || isHover ? "#ffffff" : "rgba(255,255,255,0.88)",
-              fontSize: "clamp(12px, 0.88vw, 16px)", fontWeight: active ? 600 : 400,
-              whiteSpace: "nowrap", transition: "color 0.15s", textShadow: "0 1px 2px rgba(0,0,0,0.18)",
+              color: "#ffffff",
+              fontSize: "clamp(13px, 0.95vw, 18px)", fontWeight: active ? 600 : 400,
+              whiteSpace: "nowrap", textShadow: "0 1px 2px rgba(0,0,0,0.18)",
             }}>{item}</span>
-            {active && (
-              <span style={{ position: "absolute", bottom: 4, width: "70%", height: 2.5, borderRadius: 2, background: "#cfe4ff" }} />
-            )}
           </div>
         );
       })}
@@ -296,7 +302,7 @@ function HeaderUtilityLinks({ onLogin }: { onLogin?: () => void }) {
     <div style={{
       position: "absolute", top: 0, right: "2.2%",
       height: NAV_BAR_H,
-      display: "flex", alignItems: "center", gap: 10, zIndex: 20,
+      display: "flex", alignItems: "center", gap: 10, zIndex: 20, fontFamily: PORTAL_FONT,
     }}>
       {["登录", "繁体", "无障碍"].map((t, i) => (
         <div key={t} style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -313,37 +319,20 @@ function HeaderUtilityLinks({ onLogin }: { onLogin?: () => void }) {
   );
 }
 
-/* ── HeroLockup：中部平台标题锁版(上海 Logo + 平台名 + SHANGHAI DESK) ── */
+/* ── HeroLockup：官方标题锁版图(透明底藏青,Logo+平台名+SHANGHAI DESK 一体) ── */
 function HeroLockup() {
   return (
-    <div style={{
-      position: "absolute", top: "clamp(78px, 13vh, 150px)", left: "50%", transform: "translateX(-50%)",
-      display: "flex", alignItems: "center", gap: "clamp(14px, 1.6vw, 22px)", zIndex: 12,
-    }}>
-      {/* 上海 Logo(白色主体)置于品牌蓝圆角衬底上 */}
-      <div style={{
-        width: "clamp(58px, 5.4vw, 78px)", height: "clamp(58px, 5.4vw, 78px)", flexShrink: 0,
-        borderRadius: "clamp(14px, 1.3vw, 18px)",
-        background: "linear-gradient(135deg,#2d78e8 0%,#0f4fa8 100%)",
-        boxShadow: "0 10px 26px rgba(13,54,116,0.30)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <img src={shanghaiLogo} alt="上海市企业出海综合服务平台" draggable={false}
-          style={{ width: "76%", height: "76%", objectFit: "contain" }} />
-      </div>
-      <div>
-        <h1 style={{
-          margin: 0, fontSize: "clamp(24px, 2.5vw, 36px)", fontWeight: 800, color: "#0b3a7a",
-          letterSpacing: "0.1em", lineHeight: 1.25,
-          textShadow: "0 2px 12px rgba(255,255,255,0.7)",
-          fontFamily: "'PingFang SC','Microsoft YaHei','Hiragino Sans GB',sans-serif",
-        }}>上海市企业出海综合服务平台</h1>
-        <p style={{
-          margin: "clamp(4px, 0.6vh, 8px) 0 0", fontSize: "clamp(10px, 0.92vw, 13px)",
-          fontWeight: 600, color: "#3a6db5", letterSpacing: "0.42em", whiteSpace: "nowrap",
-        }}>SHANGHAI DESK</p>
-      </div>
-    </div>
+    <img
+      src={seggLockup}
+      alt="上海市企业出海综合服务平台"
+      draggable={false}
+      style={{
+        position: "absolute", top: "clamp(72px, 11.5vh, 132px)", left: "50%", transform: "translateX(-50%)",
+        width: "clamp(400px, 42vw, 640px)", height: "auto", zIndex: 12,
+        filter: "drop-shadow(0 3px 10px rgba(13,54,116,0.18))",
+        pointerEvents: "none", userSelect: "none",
+      }}
+    />
   );
 }
 
