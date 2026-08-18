@@ -216,33 +216,43 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-              {voice.listening ? (
-                <DictationControls size="md" onConfirm={voice.confirm} onCancel={voice.cancel} />
-              ) : (
-                <MicButton supported={voice.supported} onClick={voice.toggle} />
-              )}
+            {/* 操作区:清除 · 麦克风 · 发送,统一 44px 圆钮 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
               <button
                 onClick={(e) => { e.stopPropagation(); handleClear(); }}
                 disabled={!hasContent || submitting}
+                title="清除" aria-label="清除"
                 style={{
-                  display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "none", padding: 0,
-                  color: hasContent ? "#5a7196" : "#aebdd0", fontSize: 13,
-                  cursor: hasContent && !submitting ? "pointer" : "default", fontFamily: "inherit",
+                  width: 44, height: 44, borderRadius: "50%", border: "none", flexShrink: 0, padding: 0,
+                  background: "#e8edf5",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  cursor: hasContent && !submitting ? "pointer" : "default",
+                  opacity: hasContent || submitting ? 1 : 0.55,
+                  transition: "background .15s, transform 0.15s, opacity 0.2s",
                 }}
+                onMouseEnter={e => { if (hasContent && !submitting) e.currentTarget.style.background = "#dde4f0"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#e8edf5"; }}
+                onMouseDown={(e) => { if (hasContent && !submitting) e.currentTarget.style.transform = "scale(0.92)"; }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#e8edf5"; e.currentTarget.style.transform = "scale(1)"; }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={hasContent ? "#5a7196" : "#aebdd0"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                 </svg>
-                清除
               </button>
+
+              {voice.listening ? (
+                <DictationControls size="md" onConfirm={voice.confirm} onCancel={voice.cancel} />
+              ) : (
+                <MicButton size="lg" supported={voice.supported} onClick={voice.toggle} />
+              )}
 
               <button
                 onClick={(e) => { e.stopPropagation(); handleSend(); }}
                 disabled={!hasContent || submitting}
                 aria-label="发送"
                 style={{
-                  width: 52, height: 52, border: "none", flexShrink: 0, background: "transparent", padding: 0,
+                  width: 44, height: 44, border: "none", flexShrink: 0, background: "transparent", padding: 0,
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                   cursor: hasContent && !submitting ? "pointer" : "default",
                   opacity: hasContent || submitting ? 1 : 0.45, // 恒蓝底,空值降透明度
@@ -253,7 +263,7 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
                 onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
               >
                 {submitting ? <Spinner /> : (
-                  <SendUpGlyph size={52} color="#1a5bc6"
+                  <SendUpGlyph size={44} color="#1a5bc6"
                     style={hasContent ? { filter: "drop-shadow(0 4px 10px rgba(37,99,235,0.35))" } : undefined} />
                 )}
               </button>

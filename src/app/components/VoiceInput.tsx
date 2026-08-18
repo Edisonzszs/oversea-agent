@@ -294,14 +294,14 @@ export function RecordingBar({ elapsed, sessionText = "", interim, meterRef, com
   );
 }
 
-// ─── 麦克风按钮(md=34px 首页 / sm=22px 伴填,热区已保证) ──────────────────────
+// ─── 麦克风按钮(lg=44px 门户 / md=34px 聊天 / sm=22px 伴填,热区已保证) ──────────
 // supported=false 时仍渲染按钮(探测可能因双模块实例/环境差异失灵),点击时提示不支持。
 // 听写中的停止/取消/确认由 DictationControls 负责,本按钮只在待听写时渲染。
-export function MicButton({ supported, onClick, size = "md" as "md" | "sm" }: {
-  supported: boolean; onClick: () => void; size?: "md" | "sm";
+export function MicButton({ supported, onClick, size = "md" as "md" | "sm" | "lg" }: {
+  supported: boolean; onClick: () => void; size?: "md" | "sm" | "lg";
 }) {
-  const box = size === "sm" ? 22 : 34;
-  const icon = size === "sm" ? 12 : 16;
+  const box = size === "sm" ? 22 : size === "lg" ? 44 : 34;
+  const icon = size === "sm" ? 12 : size === "lg" ? 20 : 16;
   const fire = () => { if (!supported) { alert("当前浏览器不支持语音输入，请使用 Chrome/Edge"); return; } onClick(); };
 
   return (
