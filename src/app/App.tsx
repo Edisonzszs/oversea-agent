@@ -137,6 +137,14 @@ export default function App() {
   // 回门户首页(平台导航条「首页」)
   const handleBackToPortal = () => setMode("portal");
 
+  // 门户右侧浮动栏「智能体」:直达出海智能体界面(新对话,不携带问题)
+  const handleEnterAgent = () => {
+    setChatSeed(null);
+    setActiveConvId("new");
+    setMode("xiaohai");
+    setFrame("chat");
+  };
+
   // 统一登录入口:记录当前模式,登录成功/返回时回原处(合规"完整版→去登录"走自己的 pending 流程)
   const enterLogin = () => { setLoginReturnMode(mode === "login" ? "xiaohai" : mode); setMode("login"); };
 
@@ -401,6 +409,7 @@ export default function App() {
           onSubmit={(question) => handlePortalSubmit(question)}
           submitting={false}
           onLogin={enterLogin}
+          onEnterAgent={handleEnterAgent}
         />
       </div>
     );

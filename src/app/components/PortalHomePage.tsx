@@ -48,9 +48,11 @@ interface Props {
   submitting: boolean;
   initialDraft?: string;
   onLogin?: () => void;
+  /** 右侧浮动栏「智能体」按钮:直接进入出海智能体界面 */
+  onEnterAgent?: () => void;
 }
 
-export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogin }: Props) {
+export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogin, onEnterAgent }: Props) {
   const [value, setValue] = useState(initialDraft);
   const [focused, setFocused] = useState(false);
   const [lastSource, setLastSource] = useState<"custom" | "hot">("custom");
@@ -102,8 +104,8 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
       {/* ── 登录 / 繁体 / 无障碍 辅助入口 ── */}
       <HeaderUtilityLinks onLogin={onLogin} />
 
-      {/* ── 右侧浮动服务按钮 ── */}
-      <FloatingServiceBar />
+      {/* ── 右侧浮动服务按钮:公众号 / 小程序 / 网页端 / 智能体(直达) ── */}
+      <FloatingServiceBar onEnterAgent={onEnterAgent} />
 
       {/* ── 左下角门户资讯卡 ── */}
       <div style={{ position: "absolute", left: "2.5%", bottom: "7%", display: "flex", flexDirection: "column", gap: 12, zIndex: 12, width: "clamp(200px, 15vw, 236px)" }}>
@@ -132,22 +134,22 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
           }}
         />
 
-        {/* HomeQuestionPanel —— 整体式半透明智能服务卡 */}
+        {/* HomeQuestionPanel —— 整体式半透明智能服务卡(固定高度,欢迎态/输入态尺寸一致,无跳变) */}
         <div
           onClick={() => !inInput && enterInput()}
           style={{
-            position: "relative", zIndex: 15, minHeight: 178,
+            position: "relative", zIndex: 15, height: 178,
             background: "rgba(242,247,253,0.92)",
             border: focused ? "1px solid rgba(37,99,235,0.5)" : "1px solid rgba(255,255,255,0.75)",
             backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
             borderRadius: 22,
             boxShadow: focused ? "0 14px 38px rgba(22,66,128,0.22)" : "0 12px 32px rgba(22,66,128,0.16)",
             padding: "20px 24px 16px", display: "flex", flexDirection: "column",
-            cursor: inInput ? "default" : "text", transition: "border 0.2s, box-shadow 0.2s",
+            cursor: inInput ? "default" : "text",
           }}
         >
-          {/* 上半部：欢迎语 或 多行输入 */}
-          <div style={{ flex: 1, minHeight: 78 }}>
+          {/* 上半部：欢迎语 或 多行输入(固定高,不随状态变高) */}
+          <div style={{ height: 78, flexShrink: 0, overflow: "hidden" }}>
             {inInput ? (
               <textarea
                 ref={taRef}
@@ -160,7 +162,7 @@ export function PortalHomePage({ onSubmit, submitting, initialDraft = "", onLogi
                 rows={3}
                 autoFocus
                 style={{
-                  width: "100%", height: "100%", minHeight: 78, border: "none", outline: "none", resize: "none",
+                  width: "100%", height: "78px", border: "none", outline: "none", resize: "none",
                   background: "transparent", color: "#1a2744",
                   fontFamily: "'PingFang SC','Microsoft YaHei',sans-serif",
                   fontSize: "clamp(14px,0.95vw,15px)", lineHeight: 1.7, caretColor: "#1a5bc6",
@@ -304,13 +306,13 @@ function HeaderUtilityLinks({ onLogin }: { onLogin?: () => void }) {
   );
 }
 
-/* ── FloatingServiceBar ── */
-function FloatingServiceBar() {
-  const icons: { key: string; svg: React.ReactNode }[] = [
-    { key: "consult", svg: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /> },
-    { key: "mobile", svg: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" /></> },
-    { key: "share", svg: <><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" /></> },
-    { key: "top", svg: <path d="M18 15l-6-6-6 6" /> },
+/* ── FloatingServiceBar:微信公众号 / 小程序 / 网页端 / 智能体(直达出海智能体) ── */
+function FloatingServiceBar({ onEnterAgent }: { onEnterAgent?: () => void }) {
+  const icons: { key: string; label: string; svg: React.ReactNode; onClick?: () => void }[] = [
+    { key: "wechat", label: "微信公众号", svg: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /> },
+    { key: "miniapp", label: "小程序", svg: <><rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" /></> },
+    { key: "web", label: "网页端", svg: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c2.7 2.7 2.7 15.3 0 18M12 3c-2.7 2.7-2.7 15.3 0 18" /></> },
+    { key: "agent", label: "出海智能体", onClick: onEnterAgent, svg: <><rect x="5" y="8.5" width="14" height="10" rx="2.5" /><circle cx="9.5" cy="13.2" r="1.15" fill="#fff" stroke="none" /><circle cx="14.5" cy="13.2" r="1.15" fill="#fff" stroke="none" /><path d="M12 8.5V6" /><circle cx="12" cy="4.6" r="1.1" /><path d="M5 12.5H3.2M20.8 12.5H19" /></> },
   ];
   return (
     <div style={{
@@ -320,6 +322,9 @@ function FloatingServiceBar() {
       {icons.map((ic) => (
         <button
           key={ic.key}
+          title={ic.label}
+          aria-label={ic.label}
+          onClick={ic.onClick}
           style={{
             width: "clamp(48px,3.4vw,60px)", height: "clamp(48px,3.4vw,60px)", borderRadius: "50%", border: "none", cursor: "pointer",
             background: "linear-gradient(135deg,#2f7be0,#1a5bc6)", display: "flex", alignItems: "center", justifyContent: "center",
