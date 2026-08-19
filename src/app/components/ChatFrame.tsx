@@ -10,6 +10,8 @@ import { runOrchestration, retryOrchestrationTask } from "../orchestration/orche
 import { orchestrationReducer, createRunState } from "../orchestration/reducer";
 import type { AgentRunState, OrchestrationEvent } from "../orchestration/types";
 import { stripMarkers } from "../services/intentDetector";
+import { loadUserMemory, saveUserMemory, buildMemorySummary } from "../services/userMemoryStorage";
+import { extractMemoryFacts } from "../services/userMemoryExtract";
 import { AgentRunTrace } from "./agent-run/AgentRunTrace";
 
 // 将 Markdown 风格的 **粗体** 和 *斜体* 转为 React 元素，纯文本渲染（避免显示 ** 符号）。
@@ -87,7 +89,15 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
     abortRef.current = ctrl;
 
     try {
-      const conversation = newMsgs.slice(0, -1).map(m => ({ role: m.role, content: m.text }));
+      // 用户记忆：正则抽取（国别/行业/公司）→ 落盘 → 以【用户档案】system 消息注入对话上下文
+      // （咨询/ODI 智能体把 conversation 透传给模型；TaxIQ 只用 question，不受影响）
+      const memory = extractMemoryFacts(text, loadUserMemory());
+      saveUserMemory(memory);
+      const memSummary = buildMemorySummary(memory);
+      const conversation = [
+        ...(memSummary ? [{ role: "system", content: `【用户档案】${memSummary}（仅供参考，与当前问题无关时忽略）` }] : []),
+        ...newMsgs.slice(0, -1).map(m => ({ role: m.role, content: m.text })),
+      ];
       const result = await runOrchestration({
         question: text,
         messageId: "pending",
