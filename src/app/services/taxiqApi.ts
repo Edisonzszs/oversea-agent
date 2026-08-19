@@ -13,8 +13,13 @@
  * 鉴权由 /api/taxiq 代理注入 Authorization（见 vite.config.ts），客户端不持有 token。
  */
 
+import { isTaxiqNoDirectSupportAnswer } from './taxiqSanitize'
+
 const API_BASE = '/api/taxiq'
 const STATE_KEY = 'taxiq:state' // localStorage：对应生产 MEMORY/taxiq_state.json
+
+/** 答案字节上限（对齐生产 TAXIQ_STREAM_MAX_ANSWER_BYTES） */
+const MAX_ANSWER_BYTES = 2 * 1024 * 1024
 
 interface TaxiqState {
   conversation_id: string | null
@@ -69,6 +74,18 @@ export interface TaxiqChatResult {
   refers: unknown[]
 }
 
+/**
+ * 上游固定未覆盖契约答复（"抱歉，当前问题超出知识库覆盖范围，暂时无法解答。"）。
+ * 这是 TaxIQ 的明确"不覆盖"表态，不是可用答案：抛错交上层兜底，不得作为成功正文交付。
+ */
+export class TaxiqNoDirectSupportError extends Error {
+  readonly code = 'taxiq_no_direct_support'
+  constructor() {
+    super('TaxIQ 知识库未覆盖该问题')
+    this.name = 'TaxiqNoDirectSupportError'
+  }
+}
+
 export interface TaxiqChatOptions {
   question: string
   onChunk: (chunk: string) => void
@@ -92,6 +109,8 @@ export async function streamTaxiqChat(options: TaxiqChatOptions): Promise<TaxiqC
     result = await runMessages(freshId, question, onChunk, signal)
     if (!result) throw new Error('TaxIQ 会话重试仍无响应')
   }
+  // 固定未覆盖契约答复：上游明确"不覆盖"，按失败处理（自愈重试也无法改变覆盖范围）
+  if (isTaxiqNoDirectSupportAnswer(result.answer)) throw new TaxiqNoDirectSupportError()
   return result
 }
 
@@ -160,13 +179,23 @@ async function runMessages(
         }
       } else if (eventType === 'MESSAGE_FINISH') {
         sessionId = (obj.sessionId as string | null) ?? null
+        // finish 载荷可携带完整正文（对齐生产）：与已拼接正文不一致视为流异常，交自愈重试
+        const finishAnswer = obj.answer
+        if (typeof finishAnswer === 'string' && finishAnswer.trim()) {
+          if (full && finishAnswer !== full) return null
+          full = finishAnswer
+        }
         finished = true
       }
     }
     if (finished) break
   }
 
-  if (!finished && !full.trim()) return null // 空答 → 疑似会话失效
+  // 流完整性（对齐生产 STREAM_INCOMPLETE）：未收到 MESSAGE_FINISH 的残缺流一律视为会话异常，
+  // 不再把部分正文当成功答案交付。
+  if (!finished) return null
+  if (!full.trim()) return null // 空答 → 疑似会话失效
+  if (full.length * 4 > MAX_ANSWER_BYTES) throw new Error('TaxIQ 答复超出长度上限')
   saveState({ conversation_id: conversationId, session_id: sessionId })
   return { answer: full, conversation_id: conversationId, session_id: sessionId, refers }
 }

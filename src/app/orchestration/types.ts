@@ -41,6 +41,8 @@ export interface AgentResult {
   output: string;
   summary: string;
   sources: AgentSource[];
+  /** 权威数据源不可用时的降级说明（如 TaxIQ 未覆盖 → 通用税务知识应答），供聚合与轨迹披露 */
+  degraded?: string;
 }
 
 export interface AgentError {

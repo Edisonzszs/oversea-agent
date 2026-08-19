@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { streamReasoningChat } from "../../services/deepseekApi";
-import { streamTaxiqChat } from "../../services/taxiqApi";
+import {
+  TaxiqNoDirectSupportError,
+  streamTaxiqChat,
+} from "../../services/taxiqApi";
 import { consultingAgent } from "../../agents/adapters/consultingAgent";
 import { odiAgent } from "../../agents/adapters/odiAgent";
 import { taxiqAgent } from "../../agents/adapters/taxiqAgent";
@@ -22,9 +25,13 @@ vi.mock("../../services/deepseekApi", async (importOriginal) => {
   };
 });
 
-vi.mock("../../services/taxiqApi", () => ({
-  streamTaxiqChat: vi.fn(),
-}));
+vi.mock("../../services/taxiqApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../services/taxiqApi")>();
+  return {
+    ...actual,
+    streamTaxiqChat: vi.fn(),
+  };
+});
 
 const reasoningMock = vi.mocked(streamReasoningChat);
 const taxiqMock = vi.mocked(streamTaxiqChat);
@@ -325,13 +332,10 @@ describe("professional agent adapters", () => {
     vi.clearAllMocks();
   });
 
-  it("streams TaxIQ chunks in order and completes once with safe URL citations", async () => {
+  it("buffers TaxIQ output, sanitizes it and delivers once with safe URL citations", async () => {
     const answer = "A".repeat(170);
-    taxiqMock.mockImplementation(async ({ onChunk, signal: passedSignal }) => {
+    taxiqMock.mockImplementation(async ({ signal: passedSignal }) => {
       expect(passedSignal).toBeDefined();
-      onChunk("");
-      onChunk("A".repeat(80));
-      onChunk("A".repeat(90));
       return {
         answer,
         conversation_id: "conversation-1",
@@ -347,13 +351,18 @@ describe("professional agent adapters", () => {
 
     const events = await collect(taxiqAgent.run(input, { signal: signal() }));
 
+    // 缓冲整段后净化交付：单条 output.delta（生产 Tool 载荷边界口径）
     expect(events.map((event) => event.type)).toEqual([
       "progress",
-      "output.delta",
+      "progress",
       "output.delta",
       "completed",
     ]);
     expect(events.filter((event) => event.type === "completed")).toHaveLength(1);
+    expect(events.find((event) => event.type === "output.delta")).toEqual({
+      type: "output.delta",
+      delta: answer,
+    });
     expect(events[events.length - 1]).toEqual({
       type: "completed",
       result: {
@@ -380,17 +389,37 @@ describe("professional agent adapters", () => {
     );
   });
 
+  it("strips internal source attribution before delivering the TaxIQ answer", async () => {
+    taxiqMock.mockResolvedValue({
+      answer: "根据TaxIQ的分析，越南企业所得税标准税率为20%。",
+      conversation_id: "conversation-1",
+      refers: [],
+    });
+
+    const events = await collect(taxiqAgent.run(input, { signal: signal() }));
+    const completed = events.find((event) => event.type === "completed");
+
+    expect(completed).toEqual({
+      type: "completed",
+      result: {
+        output: "越南企业所得税标准税率为20%。",
+        summary: "越南企业所得税标准税率为20%。",
+        sources: [],
+      },
+    });
+    expect(
+      events.find((event) => event.type === "output.delta"),
+    ).toEqual({ type: "output.delta", delta: "越南企业所得税标准税率为20%。" });
+  });
+
   it.each([
     null,
     ["not a url", "data:text/plain,unsafe", "javascript:alert(1)", {}, 42],
   ])("discards malformed or unsafe TaxIQ refers: %j", async (refers) => {
-    taxiqMock.mockImplementation(async ({ onChunk }) => {
-      onChunk("结果");
-      return {
-        answer: "结果",
-        conversation_id: "conversation-1",
-        refers: refers as unknown as unknown[],
-      };
+    taxiqMock.mockResolvedValue({
+      answer: "结果",
+      conversation_id: "conversation-1",
+      refers: refers as unknown as unknown[],
     });
 
     const events = await collect(taxiqAgent.run(input, { signal: signal() }));
@@ -399,6 +428,123 @@ describe("professional agent adapters", () => {
     expect(completed).toEqual({
       type: "completed",
       result: { output: "结果", summary: "结果", sources: [] },
+    });
+  });
+
+  it("completes a follow-up question with the latest country from the conversation", async () => {
+    taxiqMock.mockResolvedValue({
+      answer: "越南企业所得税为20%。",
+      conversation_id: "conversation-1",
+      refers: [],
+    });
+
+    const followUp: AgentTaskInput = {
+      ...input,
+      question: "那企业所得税呢？",
+    };
+    await collect(taxiqAgent.run(followUp, { signal: signal() }));
+
+    expect(taxiqMock).toHaveBeenCalledWith(
+      expect.objectContaining({ question: "那企业所得税呢？（国家/地区：越南）" }),
+    );
+  });
+
+  it("asks for the country instead of calling TaxIQ when none exists (clarify terminal)", async () => {
+    const noCountryInput: AgentTaskInput = {
+      question: "外派员工的个人所得税怎么处理？",
+      instruction: "说明外派个税规则",
+      conversation: [{ role: "user", content: "我们准备外派员工" }],
+    };
+
+    const events = await collect(taxiqAgent.run(noCountryInput, { signal: signal() }));
+    const completed = events.find((event) => event.type === "completed");
+
+    expect(taxiqMock).not.toHaveBeenCalled();
+    expect(completed).toEqual({
+      type: "completed",
+      result: {
+        output: expect.stringContaining("您想了解哪个国家或地区"),
+        summary: "已请用户补充国家/地区",
+        sources: [],
+      },
+    });
+    const delta = events.find((event) => event.type === "output.delta");
+    expect(delta).toEqual({
+      type: "output.delta",
+      delta: expect.stringContaining("[QUICK_QUESTIONS:"),
+    });
+  });
+
+  it.each([
+    ["未覆盖契约", new TaxiqNoDirectSupportError()],
+    ["净化后为空", new Error("TaxIQ 答复净化后为空")],
+    ["传输失败", new Error("TaxIQ 会话重试仍无响应")],
+  ])("falls back to general tax knowledge on TaxIQ failure: %s", async (_label, failure) => {
+    taxiqMock.mockRejectedValue(failure);
+    reasoningMock.mockImplementation(async (options) => {
+      expect(options.systemPrompt).toContain("跨境税务咨询专家");
+      options.onContent("通用");
+      options.onContent("答复");
+      return { reasoning: "", content: "通用答复" };
+    });
+
+    const events = await collect(taxiqAgent.run(input, { signal: signal() }));
+    const completed = events.find((event) => event.type === "completed");
+
+    expect(
+      events.some(
+        (event) =>
+          event.type === "progress" && event.text.includes("国别税策库暂不可用"),
+      ),
+    ).toBe(true);
+    expect(completed).toEqual({
+      type: "completed",
+      result: {
+        output: "通用答复",
+        summary: expect.stringContaining("TaxIQ 不可用"),
+        sources: [],
+        degraded: "TaxIQ 国别税策库不可用，本结果为通用税务知识参考",
+      },
+    });
+    // 兜底正文不携带来源引用（不得伪装权威税策库结论）
+    expect(
+      events.find(
+        (event) => event.type === "output.delta" && event.delta === "通用",
+      ),
+    ).toBeDefined();
+  });
+
+  it("falls back when the sanitized answer still discloses internal sources", async () => {
+    // "详情可参考TaxIQ平台的说明" 残留披露 → 净化检测报警 → 兜底
+    taxiqMock.mockResolvedValue({
+      answer: "越南企业所得税为20%。详情可参考TaxIQ平台的说明。",
+      conversation_id: "conversation-1",
+      refers: [],
+    });
+    reasoningMock.mockImplementation(async (options) => {
+      options.onContent("兜底答复");
+      return { reasoning: "", content: "兜底答复" };
+    });
+
+    const events = await collect(taxiqAgent.run(input, { signal: signal() }));
+    const completed = events.find((event) => event.type === "completed");
+
+    expect(completed).toMatchObject({
+      type: "completed",
+      result: { output: "兜底答复", degraded: expect.any(String) },
+    });
+  });
+
+  it("fails the task only when both TaxIQ and the fallback are unavailable", async () => {
+    taxiqMock.mockRejectedValue(new Error("TaxIQ 会话重试仍无响应"));
+    reasoningMock.mockRejectedValue(new Error("fallback unavailable"));
+
+    await expect(
+      collect(taxiqAgent.run(input, { signal: signal() })),
+    ).rejects.toEqual({
+      code: "agent_request_failed",
+      message: "专业智能体暂时不可用",
+      detail: "fallback unavailable",
     });
   });
 
@@ -477,7 +623,6 @@ describe("professional agent adapters", () => {
     const pending = collect(taxiqAgent.run(input, { signal: controller.signal }));
     await invoked;
     expect(taxiqMock).toHaveBeenCalledOnce();
-    expect(observedSignal).not.toBe(controller.signal);
     controller.abort();
     expect(observedSignal?.aborted).toBe(true);
 

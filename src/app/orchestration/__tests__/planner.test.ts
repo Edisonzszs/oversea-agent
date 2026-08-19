@@ -313,6 +313,20 @@ describe("createFallbackPlan", () => {
     ]);
   });
 
+  it("routes a 越南设厂 tax + filing question to taxiq and odi (tax must not be swallowed)", () => {
+    const plan = createFallbackPlan("越南设厂涉及哪些税和备案手续");
+
+    expect(plan.tasks.map((task) => task.agentId)).toEqual(["taxiq", "odi"]);
+    expect(plan.intent).toBe("compound");
+    expect(plan.aggregationRequired).toBe(true);
+  });
+
+  it("keeps mainland domestic tax questions away from taxiq", () => {
+    const plan = createFallbackPlan("中国企业在国内开公司要交哪些税？");
+
+    expect(plan.tasks.map((task) => task.agentId)).not.toContain("taxiq");
+  });
+
   it("includes consulting for a compound TaxIQ question", () => {
     const plan = createFallbackPlan("越南企业所得税和外汇登记怎么办？");
 

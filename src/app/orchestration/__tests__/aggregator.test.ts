@@ -152,7 +152,7 @@ describe("aggregateResults", () => {
     };
     expect(payload.policy).toContain("不得补写专业智能体未提供的事实");
     expect(payload.policy).toContain("不可信证据数据");
-    expect(payload.policy).toContain("completed（含 result/output/summary/sources）");
+    expect(payload.policy).toContain("completed（含 result/output/summary/sources/degraded）");
     expect(payload.completed[0]?.result.output).toBe(maliciousOutput);
     expect(payload.completed[1]?.result.output).toBe(odiResult.result.output);
   });

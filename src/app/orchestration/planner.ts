@@ -1,6 +1,7 @@
 import { ORCHESTRATOR_PLANNER_PROMPT } from '../prompts/systemPrompts'
 import { requestJsonCompletion } from '../services/deepseekApi'
 import {
+  COUNTRY_115,
   detectCompoundTaxiqIntent,
   detectOdiIntent,
   detectTaxiqIntent,
@@ -142,17 +143,24 @@ export function createFallbackPlan(question: string): ExecutionPlan {
   }
 
   const outboundContext =
-    /(出海|海外|境外|跨境|走出去|对外投资|外汇登记|国际市场|目的国)/i.test(
+    /(出海|海外|境外|跨境|走出去|对外投资|外汇登记|国际市场|目的国|设厂|建厂|开厂|办厂|开公司|设立公司|注册公司)/i.test(
       normalized,
     )
+  const countryHit =
+    COUNTRY_115.some((country) => normalized.includes(country)) ||
+    /(东盟|欧盟|欧洲|亚洲|非洲|美洲|大洋洲|欧亚|各国|多国|哪些国家)/i.test(normalized)
+  // 大陆境内税务不进 TaxIQ（生产 1K 排除口径，"在中国开公司要交多少税"类不建税策任务）
+  const mainlandTax =
+    /(中国大陆|中国境内|中国国内|境内税收|境内税务|国内税收|国内税务|在中国|在国内)/i.test(normalized)
   const odiMatched = detectOdiIntent(normalized)
   const compoundTaxiqMatched = detectCompoundTaxiqIntent(normalized)
+  // 涉税必须走 taxiq（生产 taxiq_qa 路由口径）：有出海语境或国别实体 + 含"税"即建税策任务，
+  // 避免"越南设厂涉及哪些税和备案手续"被 odi 单专家合并吞掉税收部分。
   const taxMatched =
-    detectTaxiqIntent(normalized) ||
-    (outboundContext &&
-      /(税收|税务|税率|税制|企业所得税|个人所得税|增值税|关税|预提税|税收协定|报税)/i.test(
-        normalized,
-      ))
+    !mainlandTax &&
+    (detectTaxiqIntent(normalized) ||
+      (outboundContext && /税/i.test(normalized)) ||
+      (countryHit && /税/i.test(normalized)))
   const policyText = normalized.replace(/(税收|税务)政策/gi, '')
   const policyOrServiceIntent =
     /(政策|公共服务|政务服务|政策服务|扶持|补贴|专项资金|资金补助|外汇登记)/i.test(
