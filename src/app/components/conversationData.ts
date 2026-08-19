@@ -1,7 +1,14 @@
+import type { AgentRunState } from "../orchestration/types";
+
 export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
+  /** 旧版直连 reasoner 的思考过程（历史消息兼容展示） */
   think?: string;
+  /** 编排运行快照：多智能体调用轨迹（含来源/状态/重试） */
+  run?: AgentRunState;
+  /** 回复尾部的 [QUICK_QUESTIONS] 解析结果：引导话题 chips */
+  quickQuestions?: string[];
 }
 
 export interface ConversationItem {

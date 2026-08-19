@@ -1,9 +1,16 @@
-// 沪航者通用对话界面 —— 展示历史消息 + 底部输入框 + DeepSeek 流式输出（think + content）。
+// 沪航者通用对话界面 —— 展示历史消息 + 底部输入框 + 多智能体编排输出。
+// 融合原型项目编排层：用户提问 → 主智能体规划（direct/单专家/复合）→ 并行调用专业智能体
+// （出海智询 / TaxIQ / ODI）→ 聚合统一答复；气泡上方渲染调用轨迹（状态/耗时/来源/单任务重试）。
 // 空对话时展示欢迎页风格（banner + 快捷问题 + ChatInputBar），与原 WelcomeFrame 一致。
 
 import { useState, useRef, useEffect } from "react";
 import type { ChatMessage } from "./conversationData";
 import { useVoiceInput, MicButton, SendButton, RecordingBar, DictationControls } from "./VoiceInput";
+import { runOrchestration, retryOrchestrationTask } from "../orchestration/orchestrator";
+import { orchestrationReducer, createRunState } from "../orchestration/reducer";
+import type { AgentRunState, OrchestrationEvent } from "../orchestration/types";
+import { stripMarkers } from "../services/intentDetector";
+import { AgentRunTrace } from "./agent-run/AgentRunTrace";
 
 // 将 Markdown 风格的 **粗体** 和 *斜体* 转为 React 元素，纯文本渲染（避免显示 ** 符号）。
 function RichText({ text }: { text: string }) {
@@ -22,8 +29,6 @@ function RichText({ text }: { text: string }) {
 }
 import xiaohaiLogo from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
 
-const XIAOHAI_SYSTEM = "你是「沪航者」，上海出海综合服务平台的 AI 智能助手。你的职责是帮助企业了解境外投资（ODI）相关政策、合规要求、操作流程，以及上海本地企业出海的综合服务。回答要简洁、准确、实用，适当使用列表和加粗。如果问题超出你的知识范围，如实告知并建议咨询专业机构或查阅官方原文。";
-
 const QUICK_QUESTIONS = [
   "对外投资备案需要提交哪些材料？",
   "新加坡设立子公司需要哪些手续？",
@@ -40,23 +45,26 @@ interface Props {
   onUserMessage?: (text: string) => void;
 }
 
+type Phase = "idle" | "planning" | "running" | "aggregating" | "answering";
+
 export function ChatFrame({ messages: initialMessages, onMessagesChange, initialQuestion, onUserMessage }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [interim, setInterim] = useState("");
   const [loading, setLoading] = useState(false);
   const voice = useVoiceInput((text) => setInput(prev => prev ? prev + text : text), setInterim);
-  // 流式状态
-  const [thinkText, setThinkText] = useState("");
+  // 编排流式状态
   const [answerText, setAnswerText] = useState("");
-  const [phase, setPhase] = useState<"idle" | "thinking" | "answering">("idle");
-  const [thinkOpen, setThinkOpen] = useState(true);
+  const [phase, setPhase] = useState<Phase>("idle");
+  // 所有运行轨迹（runId → 快照）；进行中的消息与重试共用此表做 live 渲染
+  const [runs, setRuns] = useState<Record<string, AgentRunState>>({});
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null); // 停止生成(中断流式输出)
 
-  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [messages, loading, thinkText, answerText]);
+  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [messages, loading, answerText, runs, activeRunId]);
   useEffect(() => { const el = inputRef.current; if (!el) return; el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }, [input]);
 
   const send = async (overrideText?: string) => {
@@ -69,61 +77,63 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
     onUserMessage?.(text);
 
     setLoading(true);
-    setThinkText(""); setAnswerText(""); setPhase("thinking"); setThinkOpen(true);
+    setAnswerText(""); setPhase("planning"); setActiveRunId(null);
 
-    let accThink = "";
     let accAnswer = "";
+    // 运行轨迹：闭包内同步镜像（最终快照落消息）+ React 状态（live 渲染）
+    let localRun: AgentRunState | null = null;
+    const seenTaskIds = new Set<string>();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
 
     try {
-      const apiMessages = [{ role: "system", content: XIAOHAI_SYSTEM }, ...newMsgs.map(m => ({ role: m.role, content: m.text }))];
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      const resp = await fetch("/api/copilot/general-stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages }),
+      const conversation = newMsgs.slice(0, -1).map(m => ({ role: m.role, content: m.text }));
+      const result = await runOrchestration({
+        question: text,
+        messageId: "pending",
+        conversation,
         signal: ctrl.signal,
+        onEvent(ev: OrchestrationEvent) {
+          if (ctrl.signal.aborted) return;
+          // 轨迹：reduce 进闭包镜像 + upsert 到渲染表
+          if (!localRun && ev.type === "run.started") {
+            localRun = createRunState(ev.runId, ev.messageId, ev.at);
+            setActiveRunId(ev.runId);
+          }
+          if (localRun) {
+            localRun = orchestrationReducer(localRun, ev);
+            const snap = localRun;
+            setRuns(prev => ({ ...prev, [snap.runId]: snap }));
+          }
+          // 气泡正文流式
+          if (ev.type === "task.pending") seenTaskIds.add(ev.task.id);
+          if (ev.type === "plan.completed") setPhase("running");
+          if (ev.type === "aggregation.started") { accAnswer = ""; setAnswerText(""); setPhase("aggregating"); }
+          if (ev.type === "aggregation.output.delta") {
+            accAnswer += ev.delta; setAnswerText(accAnswer); setPhase("answering");
+          }
+          // 单专家任务：专家输出直接流进主气泡（保持直连时代的流式手感）
+          if (ev.type === "task.output.delta" && seenTaskIds.size === 1) {
+            accAnswer += ev.delta; setAnswerText(accAnswer); setPhase("answering");
+          }
+          if (ev.type === "run.completed" || ev.type === "run.cancelled" || ev.type === "run.failed") setPhase("idle");
+        },
       });
-      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") continue;
-          // 只吞 JSON 解析失败;流式错误事件须抛给外层 catch 走友好兜底
-          let json: any;
-          try { json = JSON.parse(data); } catch { continue; }
-          if (json.error) throw new Error(json.error);
-          const delta = json.choices?.[0]?.delta;
-          if (!delta) continue;
-          if (delta.reasoning_content) {
-            accThink += delta.reasoning_content;
-            setPhase("thinking"); setThinkText(accThink);
-          }
-          if (delta.content) {
-            accAnswer += delta.content;
-            setPhase("answering"); setAnswerText(accAnswer); setThinkOpen(false);
-          }
-        }
-      }
-
-      const finalMsgs = [...newMsgs, { role: "assistant" as const, text: accAnswer || "（无回复内容）", ...(accThink ? { think: accThink } : {}) }];
+      const parsed = stripMarkers(result.output);
+      const runSnap = localRun ?? undefined;
+      const finalMsgs = [...newMsgs, {
+        role: "assistant" as const,
+        text: parsed.cleanContent || "（无回复内容）",
+        ...(runSnap ? { run: runSnap } : {}),
+        ...(parsed.quickQuestions.length > 0 ? { quickQuestions: parsed.quickQuestions } : {}),
+      }];
       setMessages(finalMsgs);
       onMessagesChange(finalMsgs);
     } catch (e: any) {
-      if (e?.name === "AbortError") {
-        // 用户点「停止生成」:保留已流式输出的部分
-        const finalMsgs = [...newMsgs, { role: "assistant" as const, text: accAnswer || "（已停止生成）", ...(accThink ? { think: accThink } : {}) }];
+      if (e?.name === "AbortError" || ctrl.signal.aborted) {
+        // 用户点「停止生成」:保留已流式输出的部分与轨迹
+        const finalMsgs = [...newMsgs, { role: "assistant" as const, text: accAnswer || "（已停止生成）", ...(localRun ? { run: localRun } : {}) }];
         setMessages(finalMsgs);
         onMessagesChange(finalMsgs);
       } else {
@@ -132,8 +142,13 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
         onMessagesChange(finalMsgs);
       }
     } finally {
-      setLoading(false); setPhase("idle"); setThinkText(""); setAnswerText("");
+      setLoading(false); setPhase("idle"); setAnswerText(""); setActiveRunId(null);
     }
+  };
+
+  // 单任务重试：重试事件仍走原 run 的 onEvent → runs 表 live 更新（消息上的旧快照被覆盖渲染）
+  const handleRetryTask = async (runId: string, taskId: string) => {
+    try { await retryOrchestrationTask(runId, taskId); } catch { /* 运行已过期（刷新/新会话）则忽略 */ }
   };
 
   const isEmpty = messages.length === 0 && !loading;
@@ -150,6 +165,8 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const activeRun = activeRunId ? runs[activeRunId] : undefined;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -178,30 +195,36 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
             </>
           )}
 
-          {/* 消息列表 */}
-          {messages.map((m, i) => <Bubble key={i} role={m.role} text={m.text} think={m.think} />)}
+          {/* 消息列表（轨迹 live 覆盖：runs 表里有更新的快照则优先渲染——支撑完成后重试的实时反馈） */}
+          {messages.map((m, i) => (
+            <Bubble
+              key={i}
+              role={m.role}
+              text={m.text}
+              think={m.think}
+              run={m.run ? (runs[m.run.runId] ?? m.run) : undefined}
+              quickQuestions={m.quickQuestions}
+              onQuickPick={send}
+              onRetryTask={m.run ? (taskId) => handleRetryTask(m.run!.runId, taskId) : undefined}
+            />
+          ))}
 
           {/* 流式输出区 */}
           {loading && (
             <div style={{ display: "flex", gap: 10, margin: "10px 0", alignItems: "flex-start" }}>
               <img src={xiaohaiLogo} alt="沪航者" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "contain", flexShrink: 0, marginTop: 2 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                {/* think 区 */}
-                {(thinkText || phase === "thinking") && (
-                  <div style={{ marginBottom: 8 }}>
-                    <button onClick={() => setThinkOpen(v => !v)} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#94a3b8", padding: 0, marginBottom: 4 }}>
-                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ transition: "transform .2s", transform: thinkOpen ? "rotate(0)" : "rotate(-90deg)" }}><path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      {phase === "thinking" ? "思考中…" : "已深度思考"}
-                    </button>
-                    {thinkOpen && thinkText && (
-                      <div style={{ background: "#f8fafc", borderRadius: 8, border: "1px solid #eef2f7", padding: "9px 13px", fontSize: 12.5, color: "#64748b", lineHeight: 1.7, whiteSpace: "pre-wrap", maxHeight: 300, overflowY: "auto", scrollbarWidth: "none" }}><RichText text={thinkText} /></div>
-                    )}
-                    {phase === "thinking" && !thinkText && <div style={{ fontSize: 12.5, color: "#94a3b8", padding: "4px 0" }}>沪航者正在深度思考…</div>}
+                {activeRun && (activeRun.taskOrder.length > 0 || activeRun.status === "planning") && (
+                  <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "8px 14px", marginBottom: 6 }}>
+                    <AgentRunTrace run={activeRun} />
                   </div>
                 )}
-                {/* answer 区 */}
                 <div style={{ background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937", whiteSpace: "pre-wrap", minHeight: 20 }}>
-                  {answerText ? <RichText text={answerText} /> : (phase === "thinking" ? "" : <span style={{ color: "#94a3b8" }}>正在生成回复…</span>)}
+                  {answerText ? <RichText text={answerText} /> : (
+                    <span style={{ color: "#94a3b8", fontSize: 13 }}>
+                      {phase === "planning" ? "正在规划专业智能体调用…" : phase === "aggregating" ? "主智能体正在整合专业结果…" : "专业智能体正在处理…"}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -248,7 +271,15 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
   );
 }
 
-function Bubble({ role, text, think }: { role: "user" | "assistant"; text: string; think?: string }) {
+function Bubble({ role, text, think, run, quickQuestions, onQuickPick, onRetryTask }: {
+  role: "user" | "assistant";
+  text: string;
+  think?: string;
+  run?: AgentRunState;
+  quickQuestions?: string[];
+  onQuickPick: (q: string) => void;
+  onRetryTask?: (taskId: string) => void;
+}) {
   if (role === "user") {
     return (
       <div style={{ display: "flex", justifyContent: "flex-end", margin: "10px 0" }}>
@@ -261,7 +292,20 @@ function Bubble({ role, text, think }: { role: "user" | "assistant"; text: strin
       <img src={xiaohaiLogo} alt="沪航者" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "contain", flexShrink: 0, marginTop: 2 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {think && <ThinkBlock text={think} />}
+        {run && (run.taskOrder.length > 0 || run.status === "planning") && (
+          <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "8px 14px", marginBottom: 6 }}>
+            <AgentRunTrace run={run} onRetry={onRetryTask} />
+          </div>
+        )}
         <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937", whiteSpace: "pre-wrap" }}><RichText text={text} /></div>
+        {quickQuestions && quickQuestions.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, maxWidth: "78%" }}>
+            {quickQuestions.map(q => (
+              <button key={q} onClick={() => onQuickPick(q)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#fff", color: "#1a5bc6", fontSize: 12.5, cursor: "pointer", transition: "all .15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#e8f0fe"} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>{q}</button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
