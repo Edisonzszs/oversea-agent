@@ -37,11 +37,16 @@ function send(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
-async function deepseek(messages, jsonMode) {
+async function deepseek(messages, jsonMode, temperature) {
   const resp = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${DEEPSEEK_KEY}` },
-    body: JSON.stringify({ model: MODEL, messages, ...(jsonMode ? { response_format: { type: "json_object" } } : {}), stream: false }),
+    body: JSON.stringify({
+      model: MODEL, messages,
+      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      ...(typeof temperature === "number" ? { temperature } : {}),
+      stream: false,
+    }),
   });
   if (!resp.ok) throw new Error(`DeepSeek HTTP ${resp.status}: ${await resp.text()}`);
   const data = await resp.json();
@@ -72,24 +77,29 @@ const server = http.createServer(async (req, res) => {
       const content = await deepseek([{ role: "system", content: REGULATION_WRAP(contextPrompt) }, { role: "user", content: question }], true);
       send(res, 200, { content });
     } else if (url === "/api/copilot/chat") {
-      const { systemPrompt = "", userText = "" } = JSON.parse((await readBody(req)) || "{}");
-      const content = await deepseek([{ role: "system", content: systemPrompt }, { role: "user", content: userText }], true);
+      const { systemPrompt = "", userText = "", temperature } = JSON.parse((await readBody(req)) || "{}");
+      const content = await deepseek([{ role: "system", content: systemPrompt }, { role: "user", content: userText }], true, typeof temperature === "number" ? temperature : undefined);
       send(res, 200, { content });
     } else if (url === "/api/copilot/general") {
       const { messages = [] } = JSON.parse((await readBody(req)) || "{}");
       const content = await deepseek(messages, false);
       send(res, 200, { content });
     } else if (url === "/api/copilot/general-stream") {
-      const { messages = [] } = JSON.parse((await readBody(req)) || "{}");
+      const { messages = [], model = "deepseek-reasoner", temperature, maxTokens } = JSON.parse((await readBody(req)) || "{}");
       res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Connection": "keep-alive" });
       // 客户端断开（浏览器「停止生成」会 abort fetch）→ 中断上游 DeepSeek 流，停止计费
       const abort = new AbortController();
       let clientGone = false;
       res.on("close", () => { clientGone = true; try { abort.abort(); } catch {} });
+      // deepseek-reasoner 不支持采样参数：非 reasoner 才下发 temperature/max_tokens
+      const extra = model === "deepseek-reasoner" ? {} : {
+        ...(typeof temperature === "number" ? { temperature } : {}),
+        ...(typeof maxTokens === "number" ? { max_tokens: maxTokens } : {}),
+      };
       const resp = await fetch(`${BASE}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${DEEPSEEK_KEY}` },
-        body: JSON.stringify({ model: "deepseek-reasoner", messages, stream: true }),
+        body: JSON.stringify({ model, messages, ...extra, stream: true }),
         signal: abort.signal,
       });
       if (!resp.ok || !resp.body) { res.end(`data: ${JSON.stringify({ error: `DeepSeek ${resp.status}` })}\n\n`); return; }

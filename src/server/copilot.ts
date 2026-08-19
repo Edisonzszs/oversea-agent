@@ -18,12 +18,17 @@ const KEY = process.env.DEEPSEEK_API_KEY;
 const BASE = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 
-async function deepseek(messages: { role: string; content: string }[], jsonMode: boolean): Promise<string> {
+async function deepseek(messages: { role: string; content: string }[], jsonMode: boolean, temperature?: number): Promise<string> {
   if (!KEY) throw new Error("DEEPSEEK_API_KEY 未设置");
   const res = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
-    body: JSON.stringify({ model: MODEL, messages, ...(jsonMode ? { response_format: { type: "json_object" } } : {}), stream: false }),
+    body: JSON.stringify({
+      model: MODEL, messages,
+      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      ...(typeof temperature === "number" ? { temperature } : {}),
+      stream: false,
+    }),
   });
   if (!res.ok) throw new Error(`DeepSeek HTTP ${res.status}: ${await res.text()}`);
   const data: any = await res.json();
@@ -68,8 +73,8 @@ export function registerCopilot(server: ViteDevServer) {
   // 统一伴填对话：systemPrompt 由前端组装（含可抽取字段 + 法规知识库 + 输出格式），直接透传给 DeepSeek（JSON mode）。
   server.middlewares.use("/api/copilot/chat", async (req: any, res: any) => {
     try {
-      const { systemPrompt = "", userText = "" } = JSON.parse((await readBody(req)) || "{}");
-      const content = await deepseek([{ role: "system", content: systemPrompt }, { role: "user", content: userText }], true);
+      const { systemPrompt = "", userText = "", temperature } = JSON.parse((await readBody(req)) || "{}");
+      const content = await deepseek([{ role: "system", content: systemPrompt }, { role: "user", content: userText }], true, typeof temperature === "number" ? temperature : undefined);
       send(res, 200, { content });
     } catch (e: any) { send(res, 500, { error: String(e?.message || e) }); }
   });
@@ -84,16 +89,21 @@ export function registerCopilot(server: ViteDevServer) {
   // 沪航者流式对话（deepseek-reasoner，支持 think + content 流式输出）
   server.middlewares.use("/api/copilot/general-stream", async (req: any, res: any) => {
     try {
-      const { messages = [] } = JSON.parse((await readBody(req)) || "{}");
+      const { messages = [], model = "deepseek-reasoner", temperature, maxTokens } = JSON.parse((await readBody(req)) || "{}");
       res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Connection": "keep-alive" });
       // 客户端断开（浏览器「停止生成」会 abort fetch）→ 中断上游 DeepSeek 流，停止计费
       const abort = new AbortController();
       let clientGone = false;
       res.on("close", () => { clientGone = true; try { abort.abort(); } catch {} });
+      // deepseek-reasoner 不支持采样参数：非 reasoner 才下发 temperature/max_tokens
+      const extra = model === "deepseek-reasoner" ? {} : {
+        ...(typeof temperature === "number" ? { temperature } : {}),
+        ...(typeof maxTokens === "number" ? { max_tokens: maxTokens } : {}),
+      };
       const resp = await fetch(`${BASE}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
-        body: JSON.stringify({ model: "deepseek-reasoner", messages, stream: true }),
+        body: JSON.stringify({ model, messages, ...extra, stream: true }),
         signal: abort.signal,
       });
       if (!resp.ok || !resp.body) { res.end(`data: ${JSON.stringify({ error: `DeepSeek ${resp.status}` })}\n\n`); return; }
