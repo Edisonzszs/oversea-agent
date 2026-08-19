@@ -316,7 +316,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
                 {/* 复合问题实时显示轨迹；单专家直通流式期间隐藏轨迹（完成后消息上方显示收起态），
                     避免出现「专家调用中」与「主气泡已出结果」的视觉交叉 */}
                 {activeRun && activeRun.taskOrder.length > 1 && (
-                  <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "8px 14px", marginBottom: 6 }}>
+                  <div style={{ background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "8px 14px", marginBottom: 6 }}>
                     <AgentRunTrace run={activeRun} />
                   </div>
                 )}
@@ -384,7 +384,8 @@ function Bubble({ role, text, think, run, quickQuestions, onQuickPick, onRetryTa
   if (role === "user") {
     return (
       <div style={{ display: "flex", justifyContent: "flex-end", margin: "10px 0" }}>
-        <div style={{ maxWidth: "78%", background: "#1a5bc6", color: "#fff", borderRadius: "14px 14px 4px 14px", padding: "10px 15px", fontSize: 14, lineHeight: 1.6 }}><RichText text={text} /></div>
+        {/* 对齐 Claude/Codex：用户气泡从右往左最多占约 2/3 宽度即换行 */}
+        <div style={{ maxWidth: "66%", background: "#1a5bc6", color: "#fff", borderRadius: "14px 14px 4px 14px", padding: "10px 15px", fontSize: 14, lineHeight: 1.6 }}><RichText text={text} /></div>
       </div>
     );
   }
@@ -394,11 +395,12 @@ function Bubble({ role, text, think, run, quickQuestions, onQuickPick, onRetryTa
       <div style={{ flex: 1, minWidth: 0 }}>
         {think && <ThinkBlock text={think} />}
         {run && (run.taskOrder.length > 0 || run.status === "planning") && (
-          <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "8px 14px", marginBottom: 6 }}>
+          <div style={{ background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "8px 14px", marginBottom: 6 }}>
             <AgentRunTrace run={run} onRetry={onRetryTask} />
           </div>
         )}
-        <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937" }}>
+        {/* 对齐 Claude/Codex：AI 答复占满对话列剩余宽度（头像右侧到列右缘）再换行 */}
+        <div style={{ background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937" }}>
           <RichText text={text} />
           {/* 平台固定咨询口径：所有 AI 答复底部展示 */}
           <div style={{ borderTop: "1px dashed #e3eaf3", marginTop: 10, paddingTop: 8, fontSize: 11.5, color: "#93a5bd", lineHeight: 1.75 }}>
@@ -407,7 +409,7 @@ function Bubble({ role, text, think, run, quickQuestions, onQuickPick, onRetryTa
           </div>
         </div>
         {quickQuestions && quickQuestions.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, maxWidth: "78%" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
             {quickQuestions.map(q => (
               <button key={q} onClick={() => onQuickPick(q)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#fff", color: "#1a5bc6", fontSize: 12.5, cursor: "pointer", transition: "all .15s" }}
                 onMouseEnter={e => e.currentTarget.style.background = "#e8f0fe"} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>{q}</button>
