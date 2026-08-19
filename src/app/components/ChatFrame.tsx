@@ -14,16 +14,89 @@ import { loadUserMemory, saveUserMemory, buildMemorySummary } from "../services/
 import { extractMemoryFacts } from "../services/userMemoryExtract";
 import { AgentRunTrace } from "./agent-run/AgentRunTrace";
 
-// 将 Markdown 风格的 **粗体** 和 *斜体* 转为 React 元素，纯文本渲染（避免显示 ** 符号）。
+// 轻量 Markdown 渲染：标题(##/###)、无序/有序列表、分隔线(---/--/—)、**粗体**、*斜体*、`代码`。
+// 政务模型输出以这些符号为主；未识别的行按普通段落呈现，不显示原始符号。
 function RichText({ text }: { text: string }) {
-  // 按 ** 分割：偶数段 = 普通文本，奇数段 = 粗体
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const lines = text.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+
+  const flushList = (key: string) => {
+    if (!list) return;
+    const Tag = list.ordered ? "ol" : "ul";
+    blocks.push(
+      <Tag key={key} style={{ margin: "4px 0", paddingLeft: 20, lineHeight: 1.75 }}>
+        {list.items.map((it, i) => <li key={i} style={{ marginBottom: 2 }}>{renderInline(it)}</li>)}
+      </Tag>,
+    );
+    list = null;
+  };
+
+  lines.forEach((raw, idx) => {
+    const line = raw.replace(/\s+$/, "");
+    if (!line.trim()) { flushList(`l${idx}`); return; }
+
+    // 分隔线：--- / -- / *** / ___ / —— 单独成行
+    if (/^(\s*)(-{2,}|\*{3,}|_{3,}|—{1,})\s*$/.test(line)) {
+      flushList(`l${idx}`);
+      blocks.push(<div key={`hr${idx}`} style={{ borderTop: "1px solid #eef2f7", margin: "8px 0" }} />);
+      return;
+    }
+    // 标题 #~####
+    const h = line.match(/^\s*(#{1,4})\s+(.*)$/);
+    if (h) {
+      flushList(`l${idx}`);
+      const size = h[1].length <= 2 ? 14.5 : h[1].length === 3 ? 13.5 : 13;
+      blocks.push(
+        <div key={`h${idx}`} style={{ fontWeight: 700, fontSize: size, color: "#1a2744", margin: "8px 0 4px" }}>
+          {renderInline(h[2])}
+        </div>,
+      );
+      return;
+    }
+    // 无序列表 - / * / +（行首，后跟内容——避开 ** 粗体）
+    const ul = line.match(/^\s*[-*+]\s+(.+)$/);
+    if (ul && !/^\s*[-*+]\s*\*/.test(line)) {
+      if (!list || list.ordered) { flushList(`l${idx}`); list = { ordered: false, items: [] }; }
+      list.items.push(ul[1]);
+      return;
+    }
+    // 有序列表 1. / 1、 / 1)
+    const ol = line.match(/^\s*\d{1,2}[.、)]\s+(.+)$/);
+    if (ol) {
+      if (!list || !list.ordered) { flushList(`l${idx}`); list = { ordered: true, items: [] }; }
+      list.items.push(ol[1]);
+      return;
+    }
+    // 引用 >
+    const bq = line.match(/^\s*>\s?(.*)$/);
+    if (bq) {
+      flushList(`l${idx}`);
+      blocks.push(
+        <div key={`bq${idx}`} style={{ borderLeft: "3px solid #d7e5f7", paddingLeft: 10, margin: "4px 0", color: "#4a6490" }}>
+          {renderInline(bq[1])}
+        </div>,
+      );
+      return;
+    }
+    // 普通段落
+    flushList(`l${idx}`);
+    blocks.push(<div key={`p${idx}`} style={{ margin: "2px 0" }}>{renderInline(line)}</div>);
+  });
+  flushList("lend");
+  return <>{blocks}</>;
+}
+
+// 行内元素：**粗体** → `code` → *斜体*（保守：两侧贴字才判斜体，避免吞列表星号）
+function renderInline(s: string): React.ReactNode {
+  const parts = s.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*[^*\s]\*)/g);
   return (
     <>
       {parts.map((part, i) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return <b key={i}>{part.slice(2, -2)}</b>;
-        }
+        if (part.startsWith("**") && part.endsWith("**") && part.length > 4) return <b key={i}>{part.slice(2, -2)}</b>;
+        if (part.startsWith("`") && part.endsWith("`") && part.length > 2)
+          return <code key={i} style={{ background: "#f4f7fb", borderRadius: 4, padding: "1px 5px", fontSize: 12.5, fontFamily: "Consolas, monospace" }}>{part.slice(1, -1)}</code>;
+        if (part.startsWith("*") && part.endsWith("*") && part.length > 2 && !part.includes("**")) return <i key={i}>{part.slice(1, -1)}</i>;
         return <span key={i}>{part}</span>;
       })}
     </>
@@ -48,6 +121,20 @@ interface Props {
 }
 
 type Phase = "idle" | "planning" | "running" | "aggregating" | "answering";
+
+// chips 兜底：模型未输出 [QUICK_QUESTIONS] 时按参与专家组合给固定引导话题（政务口径，可运营配置）
+const FALLBACK_CHIPS: Record<string, string[]> = {
+  consulting: ["帮我了解上海出海扶持政策", "介绍一下企业出海办事服务", "告诉我ODI备案的整体流程"],
+  taxiq: ["帮我了解目的国企业所得税率", "介绍一下投资国别税收优惠", "告诉我跨境税务合规风险"],
+  odi: ["告诉我ODI备案材料清单", "帮我了解发改委备案要求", "介绍一下ODI外汇登记流程"],
+  general: ["对外投资备案需要提交哪些材料？", "新加坡设立子公司需要哪些手续？", "ODI 外汇登记怎么办理？"],
+};
+function fallbackChips(run?: AgentRunState): string[] {
+  const ids = run?.plan?.tasks.map(t => t.agentId) ?? [];
+  const out: string[] = [];
+  for (const id of ids) for (const q of FALLBACK_CHIPS[id] ?? []) { if (out.length < 3 && !out.includes(q)) out.push(q); }
+  return out.length > 0 ? out : FALLBACK_CHIPS.general;
+}
 
 export function ChatFrame({ messages: initialMessages, onMessagesChange, initialQuestion, onUserMessage }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
@@ -132,11 +219,13 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
 
       const parsed = stripMarkers(result.output);
       const runSnap = localRun ?? undefined;
+      // chips：模型输出优先；未输出时按参与专家兜底（保证每条专业答复都有引导话题）
+      const chips = parsed.quickQuestions.length > 0 ? parsed.quickQuestions : fallbackChips(runSnap);
       const finalMsgs = [...newMsgs, {
         role: "assistant" as const,
         text: parsed.cleanContent || "（无回复内容）",
         ...(runSnap ? { run: runSnap } : {}),
-        ...(parsed.quickQuestions.length > 0 ? { quickQuestions: parsed.quickQuestions } : {}),
+        ...(chips.length > 0 ? { quickQuestions: chips } : {}),
       }];
       setMessages(finalMsgs);
       onMessagesChange(finalMsgs);
@@ -224,12 +313,14 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
             <div style={{ display: "flex", gap: 10, margin: "10px 0", alignItems: "flex-start" }}>
               <img src={xiaohaiLogo} alt="沪航者" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "contain", flexShrink: 0, marginTop: 2 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                {activeRun && (activeRun.taskOrder.length > 0 || activeRun.status === "planning") && (
+                {/* 复合问题实时显示轨迹；单专家直通流式期间隐藏轨迹（完成后消息上方显示收起态），
+                    避免出现「专家调用中」与「主气泡已出结果」的视觉交叉 */}
+                {activeRun && activeRun.taskOrder.length > 1 && (
                   <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "8px 14px", marginBottom: 6 }}>
                     <AgentRunTrace run={activeRun} />
                   </div>
                 )}
-                <div style={{ background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937", whiteSpace: "pre-wrap", minHeight: 20 }}>
+                <div style={{ background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937", minHeight: 20 }}>
                   {answerText ? <RichText text={answerText} /> : (
                     <span style={{ color: "#94a3b8", fontSize: 13 }}>
                       {phase === "planning" ? "正在规划专业智能体调用…" : phase === "aggregating" ? "主智能体正在整合专业结果…" : "专业智能体正在处理…"}
@@ -293,7 +384,7 @@ function Bubble({ role, text, think, run, quickQuestions, onQuickPick, onRetryTa
   if (role === "user") {
     return (
       <div style={{ display: "flex", justifyContent: "flex-end", margin: "10px 0" }}>
-        <div style={{ maxWidth: "78%", background: "#1a5bc6", color: "#fff", borderRadius: "14px 14px 4px 14px", padding: "10px 15px", fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap" }}><RichText text={text} /></div>
+        <div style={{ maxWidth: "78%", background: "#1a5bc6", color: "#fff", borderRadius: "14px 14px 4px 14px", padding: "10px 15px", fontSize: 14, lineHeight: 1.6 }}><RichText text={text} /></div>
       </div>
     );
   }
@@ -307,7 +398,14 @@ function Bubble({ role, text, think, run, quickQuestions, onQuickPick, onRetryTa
             <AgentRunTrace run={run} onRetry={onRetryTask} />
           </div>
         )}
-        <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937", whiteSpace: "pre-wrap" }}><RichText text={text} /></div>
+        <div style={{ maxWidth: "78%", background: "#fff", borderRadius: "4px 14px 14px 14px", border: "1px solid #e5eaf2", padding: "10px 15px", fontSize: 14, lineHeight: 1.7, color: "#1f2937" }}>
+          <RichText text={text} />
+          {/* 平台固定咨询口径：所有 AI 答复底部展示 */}
+          <div style={{ borderTop: "1px dashed #e3eaf3", marginTop: 10, paddingTop: 8, fontSize: 11.5, color: "#93a5bd", lineHeight: 1.75 }}>
+            如需进一步咨询，可拨打服务热线：021-60325182、021-60325183、021-60325185<br />
+            服务时间：工作日 9:00–11:30，13:30–17:00
+          </div>
+        </div>
         {quickQuestions && quickQuestions.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, maxWidth: "78%" }}>
             {quickQuestions.map(q => (

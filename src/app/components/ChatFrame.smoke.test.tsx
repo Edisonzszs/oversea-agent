@@ -74,4 +74,37 @@ describe("ChatFrame 编排融合渲染", () => {
     expect(html).toContain("已深度思考");
     expect(html).not.toContain("专业智能体调用轨迹");
   });
+
+  it("Markdown 符号渲染为结构而非原文（##/列表/分隔线/粗体）", () => {
+    const md = [
+      "## 备案核心流程",
+      "1. 商务部门备案",
+      "2. 发改委备案",
+      "- 外汇登记材料",
+      "--",
+      "**注意**：资金来源须说明",
+    ].join("\n");
+    const html = stripSsrComments(renderToString(
+      <ChatFrame messages={[{ role: "assistant", text: md }]} onMessagesChange={() => {}} />,
+    ));
+    // 标题渲染为加粗块，不再出现 ## 原文
+    expect(html).not.toContain("## 备案核心流程");
+    expect(html).toContain("备案核心流程");
+    // 有序/无序列表结构化
+    expect(html).toContain("<ol");
+    expect(html).toContain("<ul");
+    expect(html).toContain("商务部门备案");
+    // 分隔线渲染为 hr div，不出现 -- 原文
+    expect(html).not.toContain("--");
+    // 粗体渲染为 b
+    expect(html).toContain("<b>注意</b>");
+  });
+
+  it("AI 答复底部固定渲染服务热线文案", () => {
+    const html = stripSsrComments(renderToString(
+      <ChatFrame messages={[{ role: "assistant", text: "答复" }]} onMessagesChange={() => {}} />,
+    ));
+    expect(html).toContain("如需进一步咨询，可拨打服务热线：021-60325182、021-60325183、021-60325185");
+    expect(html).toContain("服务时间：工作日 9:00–11:30，13:30–17:00");
+  });
 });
