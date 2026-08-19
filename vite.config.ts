@@ -1,8 +1,22 @@
 import { defineConfig } from 'vite'
+import type { ProxyOptions } from 'vite'
 import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { registerCopilot } from './src/server/copilot'
+
+// TaxIQ SSE 流式：关闭代理缓冲，让 data: 片段实时到达
+// （token 由 registerCopilot 模块加载 .env 注入 process.env，前端源码/包零持有）
+const applySseNoBuffering: ProxyOptions['configure'] = (proxy) => {
+  proxy.on('proxyRes', (proxyRes) => {
+    if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
+      proxyRes.headers['cache-control'] = 'no-cache, no-transform'
+      proxyRes.headers['x-accel-buffering'] = 'no'
+      delete proxyRes.headers['content-length']
+      delete proxyRes.headers['content-encoding']
+    }
+  })
+}
 
 
 function figmaAssetResolver() {
@@ -34,6 +48,20 @@ export default defineConfig({
     alias: {
       // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+
+  // TaxIQ 国别税策智能体（中经国别助手，中经社）——开发期代理转发；
+  // 生产走 nginx /api/taxiq/（已配置同款 Authorization 与 SSE 不缓冲）
+  server: {
+    proxy: {
+      '/api/taxiq': {
+        target: 'https://gp.cnfic.com.cn/idis_industry/teis',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/taxiq/, ''),
+        headers: { Authorization: process.env.TAXIQ_TOKEN || '' },
+        configure: applySseNoBuffering,
+      },
     },
   },
 
