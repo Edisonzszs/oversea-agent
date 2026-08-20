@@ -2,7 +2,7 @@ import { consultingAgent } from "./adapters/consultingAgent";
 import { odiAgent } from "./adapters/odiAgent";
 import { taxiqAgent } from "./adapters/taxiqAgent";
 import type { AgentAdapter } from "./types";
-import type { AgentId } from "../orchestration/types";
+import type { AgentId } from "../../shared/orchestration/types";
 
 export function createAgentRegistry(): Map<AgentId, AgentAdapter> {
   return new Map<AgentId, AgentAdapter>([

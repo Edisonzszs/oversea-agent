@@ -1,32 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { streamReasoningChat } from "../../services/deepseekApi";
+import { streamReasoningChat } from "../../../app/services/deepseekApi";
 import {
   TaxiqNoDirectSupportError,
   streamTaxiqChat,
-} from "../../services/taxiqApi";
-import { consultingAgent } from "../../agents/adapters/consultingAgent";
-import { odiAgent } from "../../agents/adapters/odiAgent";
-import { taxiqAgent } from "../../agents/adapters/taxiqAgent";
-import { createEventStream } from "../../agents/eventStream";
-import { createAgentRegistry, getAgentAdapter } from "../../agents/registry";
+} from "../../../app/services/taxiqApi";
+import { consultingAgent } from "../../../app/agents/adapters/consultingAgent";
+import { odiAgent } from "../../../app/agents/adapters/odiAgent";
+import { taxiqAgent } from "../../../app/agents/adapters/taxiqAgent";
+import { createEventStream } from "../../../app/agents/eventStream";
+import { createAgentRegistry, getAgentAdapter } from "../../../app/agents/registry";
 import type {
   AgentAdapter,
   AgentAdapterEvent,
   AgentTaskInput,
-} from "../../agents/types";
+} from "../../../app/agents/types";
 import type { AgentId } from "../types";
 
-vi.mock("../../services/deepseekApi", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../services/deepseekApi")>();
+vi.mock("../../../app/services/deepseekApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../app/services/deepseekApi")>();
   return {
     ...actual,
     streamReasoningChat: vi.fn(),
   };
 });
 
-vi.mock("../../services/taxiqApi", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../services/taxiqApi")>();
+vi.mock("../../../app/services/taxiqApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../app/services/taxiqApi")>();
   return {
     ...actual,
     streamTaxiqChat: vi.fn(),

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { requestJsonCompletion } from "../../services/deepseekApi";
+import { requestJsonCompletion } from "../../../app/services/deepseekApi";
 import {
   createExecutionPlan,
   createFallbackPlan,

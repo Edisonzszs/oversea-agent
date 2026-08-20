@@ -6,7 +6,7 @@ import {
 } from "../../services/taxiqSanitize";
 import { TAXIQ_FALLBACK_PROMPT } from "../../prompts/systemPrompts";
 import { COUNTRY_115 } from "../../services/intentDetector";
-import type { AgentSource } from "../../orchestration/types";
+import type { AgentSource } from "../../../shared/orchestration/types";
 import { createEventStream } from "../eventStream";
 import type { AgentAdapter, AgentAdapterEvent } from "../types";
 

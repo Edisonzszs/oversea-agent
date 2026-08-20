@@ -1,11 +1,11 @@
-import { ORCHESTRATOR_PLANNER_PROMPT } from '../prompts/systemPrompts'
-import { requestJsonCompletion } from '../services/deepseekApi'
+import { ORCHESTRATOR_PLANNER_PROMPT } from '../../app/prompts/systemPrompts'
+import { requestJsonCompletion } from '../../app/services/deepseekApi'
 import {
   COUNTRY_115,
   detectCompoundTaxiqIntent,
   detectOdiIntent,
   detectTaxiqIntent,
-} from '../services/intentDetector'
+} from '../../app/services/intentDetector'
 import type { AgentId, ExecutionPlan, PlannedTask } from './types'
 
 export interface PlannerDeps {

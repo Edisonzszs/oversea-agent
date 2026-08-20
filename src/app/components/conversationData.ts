@@ -1,4 +1,4 @@
-import type { AgentRunState } from "../orchestration/types";
+import type { AgentRunState } from "../../shared/orchestration/types";
 
 export interface ChatMessage {
   role: "user" | "assistant";

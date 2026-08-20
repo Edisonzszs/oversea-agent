@@ -6,9 +6,9 @@
 import { useState, useRef, useEffect } from "react";
 import type { ChatMessage } from "./conversationData";
 import { useVoiceInput, MicButton, SendButton, RecordingBar, DictationControls } from "./VoiceInput";
-import { runOrchestration, retryOrchestrationTask } from "../orchestration/orchestrator";
-import { orchestrationReducer, createRunState } from "../orchestration/reducer";
-import type { AgentRunState, OrchestrationEvent } from "../orchestration/types";
+import { runOrchestration, retryOrchestrationTask } from "../../shared/orchestration/orchestrator";
+import { orchestrationReducer, createRunState } from "../../shared/orchestration/reducer";
+import type { AgentRunState, OrchestrationEvent } from "../../shared/orchestration/types";
 import { stripMarkers } from "../services/intentDetector";
 import { loadUserMemory, saveUserMemory, buildMemorySummary } from "../services/userMemoryStorage";
 import { extractMemoryFacts, diffMemoryFacts } from "../services/userMemoryExtract";

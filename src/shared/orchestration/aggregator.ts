@@ -1,5 +1,5 @@
-import { ORCHESTRATOR_AGGREGATION_PROMPT } from "../prompts/systemPrompts";
-import { streamChatCompletion } from "../services/deepseekApi";
+import { ORCHESTRATOR_AGGREGATION_PROMPT } from "../../app/prompts/systemPrompts";
+import { streamChatCompletion } from "../../app/services/deepseekApi";
 import type { AgentId, AgentResult, AgentSource } from "./types";
 
 export interface CompletedAgentResult {

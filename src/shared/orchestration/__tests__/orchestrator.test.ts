@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentAdapter } from "../../agents/types";
+import type { AgentAdapter } from "../../../app/agents/types";
 import type { AggregateResultsOptions } from "../aggregator";
 import { retryOrchestrationTask, runOrchestration } from "../orchestrator";
 import type { AgentId, ExecutionPlan, OrchestrationEvent } from "../types";

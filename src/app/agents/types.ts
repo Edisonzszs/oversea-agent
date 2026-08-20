@@ -1,4 +1,4 @@
-import type { AgentId, AgentResult } from "../orchestration/types";
+import type { AgentId, AgentResult } from "../../shared/orchestration/types";
 
 export interface AgentTaskInput {
   question: string;

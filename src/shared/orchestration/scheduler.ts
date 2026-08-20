@@ -1,4 +1,4 @@
-import type { AgentAdapter, AgentTaskInput } from "../agents/types";
+import type { AgentAdapter, AgentTaskInput } from "../../app/agents/types";
 import type {
   AgentError,
   AgentId,

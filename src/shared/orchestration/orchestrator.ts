@@ -1,6 +1,6 @@
-import { createAgentRegistry } from "../agents/registry";
-import type { AgentAdapter } from "../agents/types";
-import { normalizeApiError } from "../services/deepseekApi";
+import { createAgentRegistry } from "../../app/agents/registry";
+import type { AgentAdapter } from "../../app/agents/types";
+import { normalizeApiError } from "../../app/services/deepseekApi";
 import {
   aggregateResults,
   type AggregateResultsOptions,

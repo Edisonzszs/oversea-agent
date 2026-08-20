@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderToString } from "react-dom/server";
 import { ChatFrame } from "./ChatFrame";
 import type { ChatMessage } from "./conversationData";
-import type { AgentRunState } from "../orchestration/types";
+import type { AgentRunState } from "../../shared/orchestration/types";
 
 // 编排融合后的气泡渲染冒烟：轨迹（状态/标题/来源）+ 引导话题 chips + 历史思考块兼容。
 // SSR 渲染不执行 effects，零 AI 调用。
