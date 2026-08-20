@@ -11,6 +11,7 @@ import { WelcomeFrame } from "./components/WelcomeFrame";
 import { ChatFrame } from "./components/ChatFrame";
 import { CONVERSATIONS, type ConversationItem } from "./components/conversationData";
 import { getUserKey } from "./services/userKey";
+import { authHeaders, logout as authLogout } from "./services/auth";
 import type { ChatMessage } from "./components/conversationData";
 import { OdiQaFrame } from "./components/OdiQaFrame";
 import { OdiWorkbenchFrame } from "./components/OdiWorkbenchFrame";
@@ -81,7 +82,9 @@ export default function App() {
 
   const refreshServerConvs = async () => {
     try {
-      const r = await fetch(`/api/orch/conversations?user_key=${encodeURIComponent(getUserKey())}`);
+      const r = await fetch(`/api/orch/conversations?user_key=${encodeURIComponent(getUserKey())}`, {
+        headers: authHeaders(),
+      });
       if (!r.ok) return;
       const data = await r.json() as { conversations: Array<{ id: string; title: string | null; updated_at: string }> };
       setServerConvs(data.conversations.map(c => ({
@@ -259,8 +262,12 @@ export default function App() {
   };
 
   // 登录成功:若是从"完整版→去登录"来,回合规空间并弹登录版选择弹窗;否则回进入登录前的位置。
+  // 会话归属 key 从匿名切到手机号 → 刷新"我的对话"为该账号名下会话。
   const handleLoginSuccess = (u: AuthUser) => {
     login(u);
+    setServerConvs([]);
+    setServerConvMessages({});
+    void refreshServerConvs();
     if (pendingComplianceEntry) {
       setPendingComplianceEntry(false);
       setMode("compliance");
@@ -268,6 +275,15 @@ export default function App() {
     } else {
       setMode(loginReturnMode);
     }
+  };
+
+  // 退出登录:撤销服务端会话(token) + 清本地展示态;回到匿名 key 的会话视角。
+  const handleLogout = () => {
+    authLogout();
+    logout();
+    setServerConvs([]);
+    setServerConvMessages({});
+    void refreshServerConvs();
   };
 
   // 速测版 → 升级完整版:存速测作答(同题号体系,供完整版参考/灌入),免起名直接建「新项目」。
@@ -455,7 +471,7 @@ export default function App() {
     // 服务端会话（c- 前缀）：先拉历史消息再挂 ChatFrame（initialMessages 需挂载时即就绪）
     if (id.startsWith("c-") && !serverConvMessages[id]) {
       try {
-        const r = await fetch(`/api/orch/conversations/${id}/messages`);
+        const r = await fetch(`/api/orch/conversations/${id}/messages`, { headers: authHeaders() });
         if (r.ok) {
           const data = await r.json() as { messages: Array<{ role: string; content: string; meta?: { run_id?: string } | null }> };
           setServerConvMessages(prev => ({ ...prev, [id]: data.messages.map(m => ({ role: m.role as "user" | "assistant", text: m.content })) }));
@@ -545,7 +561,7 @@ export default function App() {
         <PlatformTopBar
           authState={authUser ? { isLoggedIn: true, ...authUser } : { isLoggedIn: false }}
           onLogin={enterLogin}
-          onLogout={logout}
+          onLogout={handleLogout}
         />
       )}
       <PlatformNavBar currentFrame={frame} goTo={goTo} topCollapsed={topCollapsed} onToggleTop={() => setTopCollapsed(v => !v)} onHome={handleBackToPortal} />

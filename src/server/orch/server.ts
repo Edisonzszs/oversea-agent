@@ -12,6 +12,7 @@
  * dev：vite.config 引本文件调 registerOrch（无 DATABASE_URL 时注册失败仅告警，浏览器回落本地编排）。
  */
 import http from "node:http";
+import crypto from "node:crypto";
 import type { ViteDevServer } from "vite";
 import { migrationInfo, openDb, type Db } from "./db";
 import { RunEngine } from "./engine";
@@ -40,6 +41,91 @@ function safeParse(s: string): unknown {
   try { return JSON.parse(s); } catch { return s; }
 }
 
+/* ── 手机号+验证码登录（通路版；随申办不做） ─────────────────────────────
+ * POC 口径：POST /auth/send-code 生成的 6 位码在响应里回传，前端自动预填——
+ * 真实生产环境验证码走短信通道下发且【绝不】回传响应，仅此一处差异。 */
+const PHONE_RE = /^1[3-9]\d{9}$/;
+
+/** 从 Authorization: Bearer <token> 解析已登录手机号（会话无效返回 null）。 */
+async function resolveAuthPhone(db: Db, req: http.IncomingMessage): Promise<string | null> {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) return null;
+  const r = await db.query<{ phone: string }>(
+    `SELECT phone FROM auth_sessions WHERE token = $1 AND expires_at > now()`,
+    [token],
+  );
+  return r.rows[0]?.phone ?? null;
+}
+
+async function handleAuth(
+  db: Db,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  pathname: string,
+): Promise<boolean> {
+  if (pathname === "/auth/send-code" && req.method === "POST") {
+    const { phone } = JSON.parse((await readBody(req)) || "{}");
+    if (!PHONE_RE.test(String(phone ?? ""))) { json(res, 400, { error: "手机号须为 11 位（1 开头）" }); return true; }
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    await db.query(
+      `INSERT INTO auth_codes (phone, code, expires_at) VALUES ($1, $2, now() + interval '5 minutes')`,
+      [phone, code],
+    );
+    // 顺手清理该手机号过期验证码
+    await db.query(`DELETE FROM auth_codes WHERE phone = $1 AND expires_at < now()`, [phone]);
+    json(res, 200, { ok: true, code }); // POC：回传供前端预填；生产改短信下发并删掉 code 字段
+    return true;
+  }
+
+  if (pathname === "/auth/login" && req.method === "POST") {
+    const { phone, code } = JSON.parse((await readBody(req)) || "{}");
+    if (!PHONE_RE.test(String(phone ?? ""))) { json(res, 400, { error: "手机号格式不正确" }); return true; }
+    const r = await db.query(
+      `SELECT code FROM auth_codes
+       WHERE phone = $1 AND used = false AND expires_at > now()
+       ORDER BY created_at DESC LIMIT 1`,
+      [phone],
+    );
+    const expected = r.rows[0]?.code;
+    if (!expected || expected !== String(code ?? "")) {
+      json(res, 401, { error: "验证码错误或已过期" });
+      return true;
+    }
+    await db.query(`UPDATE auth_codes SET used = true WHERE phone = $1 AND code = $2`, [phone, expected]);
+    await db.query(
+      `INSERT INTO users (phone, last_login_at) VALUES ($1, now())
+       ON CONFLICT (phone) DO UPDATE SET last_login_at = now()`,
+      [phone],
+    );
+    const token = crypto.randomUUID();
+    await db.query(
+      `INSERT INTO auth_sessions (token, phone, expires_at) VALUES ($1, $2, now() + interval '30 days')`,
+      [token, phone],
+    );
+    json(res, 200, { token, user: { phone } });
+    return true;
+  }
+
+  if (pathname === "/auth/logout" && req.method === "POST") {
+    const header = req.headers.authorization || "";
+    const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    if (token) await db.query(`DELETE FROM auth_sessions WHERE token = $1`, [token]);
+    json(res, 200, { ok: true });
+    return true;
+  }
+
+  if (pathname === "/auth/me" && req.method === "GET") {
+    const phone = await resolveAuthPhone(db, req);
+    if (!phone) { json(res, 401, { error: "未登录或会话已过期" }); return true; }
+    const u = await db.query(`SELECT phone, created_at, last_login_at FROM users WHERE phone = $1`, [phone]);
+    json(res, 200, { user: u.rows[0] ?? { phone } });
+    return true;
+  }
+
+  return false;
+}
+
 export async function createOrchHandler() {
   const db: Db = await openDb();
   const engine = new RunEngine(db);
@@ -55,13 +141,20 @@ export async function createOrchHandler() {
       return true;
     }
 
+    // 登录通路（/auth/*）
+    if (await handleAuth(db, req, res, pathname)) return true;
+
+    // 已登录请求：user_key 以会话手机号为准（客户端参数仅匿名时生效）——
+    // 对话与历史按账号真实归属，不可冒领他人 user_key
+    const authPhone = await resolveAuthPhone(db, req);
+
     // POST /runs —— 持久入队
     if (req.method === "POST" && pathname === "/runs") {
       const body = JSON.parse((await readBody(req)) || "{}");
       const result = await engine.startRun({
         question: String(body.question ?? ""),
         convId: body.conv_id ? String(body.conv_id) : undefined,
-        userKey: body.user_key ? String(body.user_key) : undefined,
+        userKey: authPhone ?? (body.user_key ? String(body.user_key) : undefined),
         conversation: Array.isArray(body.conversation)
           ? body.conversation.map((m: any) => ({ role: String(m?.role ?? "user"), content: String(m?.content ?? "") }))
           : [],
@@ -103,7 +196,7 @@ export async function createOrchHandler() {
 
     // GET /conversations?user_key= —— 会话列表（2d：前端侧边栏从服务端读）
     if (req.method === "GET" && pathname === "/conversations") {
-      const userKey = url.searchParams.get("user_key") || "anon";
+      const userKey = authPhone ?? url.searchParams.get("user_key") ?? "anon";
       const r = await db.query(
         `SELECT c.id, c.title, c.updated_at,
                 (SELECT count(*) FROM messages m WHERE m.conv_id = c.id) AS message_count
@@ -118,6 +211,14 @@ export async function createOrchHandler() {
     // GET /conversations/:id/messages —— 历史消息（按 seq 升序，含 meta）
     const convMsgsMatch = pathname.match(/^\/conversations\/([^/]+)\/messages$/);
     if (req.method === "GET" && convMsgsMatch) {
+      // 已登录时校验会话归属（他人会话 403；匿名 POC 仍可读演示数据）
+      if (authPhone) {
+        const own = await db.query(
+          `SELECT 1 FROM conversations WHERE id = $1 AND user_key = $2`,
+          [convMsgsMatch[1]!, authPhone],
+        );
+        if (!own.rows.length) { json(res, 403, { error: "无权访问该会话" }); return true; }
+      }
       const r = await db.query(
         `SELECT seq, role, content, meta FROM messages WHERE conv_id = $1 ORDER BY seq`,
         [convMsgsMatch[1]!],

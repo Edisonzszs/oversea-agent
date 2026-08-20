@@ -13,6 +13,7 @@ import { stripMarkers } from "../services/intentDetector";
 import { loadUserMemory, saveUserMemory, buildMemorySummary } from "../services/userMemoryStorage";
 import { extractMemoryFacts, diffMemoryFacts } from "../services/userMemoryExtract";
 import { getUserKey } from "../services/userKey";
+import { authHeaders } from "../services/auth";
 import { AgentRunTrace } from "./agent-run/AgentRunTrace";
 
 // 轻量 Markdown 渲染：标题(##/###)、无序/有序列表、分隔线(---/--/—)、**粗体**、*斜体*、`代码`。
@@ -267,7 +268,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
         // ── 服务端编排（M1）：持久入队 → SSE 订阅（断线可从 seq 回放） ──
         const resp = await fetch(`${ORCH_BASE}/runs`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({
             question: text,
             conv_id: convIdRef.current ?? undefined,

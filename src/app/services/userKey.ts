@@ -1,8 +1,12 @@
 /**
- * 稳定匿名 user_key（M1 无登录；localStorage 生成一次长期复用，M2 接真实账号替换）。
- * ChatFrame（创建 run）与 App（拉会话列表）共用同一 key。
+ * 会话归属 key：已登录 → 手机号（对话/历史按账号归档）；匿名 → localStorage 稳定随机 key。
+ * M2 接真实账号体系时本文件是唯一替换点。
  */
+import { getAuthSession } from "./auth";
+
 export function getUserKey(): string {
+  const session = getAuthSession();
+  if (session) return session.phone;
   try {
     let k = localStorage.getItem("chuhai:user-key");
     if (!k) {

@@ -1,9 +1,11 @@
 // 登录页 —— 照「用户登陆界面.png」:全屏渐变蓝背景(浅蓝→#1890FF)+底部城市剪影,
-// 居中白色卡片:欢迎登录 + 返回 / 手机号 / 短信验证码(自动填 1234) / 登录 / 协议勾选 / 一网通办。
-// POC 红线:手机号 + 验证码(自动填)即登录成功,不接真实后端;本版不做法人一证通。
+// 居中白色卡片:欢迎登录 + 返回 / 手机号 / 短信验证码(服务端下发自动预填) / 登录 / 协议勾选 / 一网通办。
+// 通路版:验证码由 /api/orch/auth/send-code 下发(POC 响应回传自动预填;生产走短信),
+// 登录走 /auth/login 建立服务端会话(token),对话与历史按手机号归档。随申办/一网通办不做。
 
 import { useState, useEffect, useRef } from "react";
 import { phoneToName, type AuthUser } from "../auth/useAuth";
+import { requestLoginCode, loginWithCode } from "../services/auth";
 
 const BLUE = "#1890ff";
 const BLUE_DEEP = "#096dd9";
@@ -19,13 +21,12 @@ export function LoginPage({ onLogin, onBack }: Props) {
   const [code, setCode] = useState("");
   const [agree, setAgree] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [busy, setBusy] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
-  const sendCode = () => {
-    if (!/^\d{11}$/.test(phone)) { alert("请输入 11 位手机号"); return; }
-    setCode("1234"); // POC:自动填入演示验证码
+  const startCountdown = () => {
     setCountdown(60);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
@@ -33,13 +34,33 @@ export function LoginPage({ onLogin, onBack }: Props) {
     }, 1000);
   };
 
-  const canLogin = /^\d{11}$/.test(phone) && code.trim().length > 0 && agree;
+  const sendCode = async () => {
+    if (!/^\d{11}$/.test(phone)) { alert("请输入 11 位手机号"); return; }
+    try {
+      const issued = await requestLoginCode(phone);
+      setCode(issued); // POC:下发码自动预填(生产为短信送达后手输)
+      startCountdown();
+    } catch (e: any) {
+      alert(e?.message || "验证码发送失败，请稍后再试");
+    }
+  };
 
-  const doLogin = () => {
+  const canLogin = /^\d{11}$/.test(phone) && code.trim().length > 0 && agree && !busy;
+
+  const doLogin = async () => {
     if (!/^\d{11}$/.test(phone)) { alert("请输入 11 位手机号"); return; }
     if (!code.trim()) { alert("请输入短信验证码"); return; }
     if (!agree) { alert("请先阅读并同意《用户服务协议》和《隐私政策》"); return; }
-    onLogin({ userName: phoneToName(phone), userType: "法人", certStatus: "已认证", phone: phoneToName(phone) });
+    setBusy(true);
+    try {
+      await loginWithCode(phone, code.trim()); // 建立服务端会话(token 落盘)
+      // 手机号+验证码 = 个人账号；法人身份须走随申办法人登录（本 POC 不做）
+      onLogin({ userName: phoneToName(phone), userType: "个人", certStatus: "未认证", phone });
+    } catch (e: any) {
+      alert(e?.message || "登录失败，请稍后再试");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -99,7 +120,7 @@ export function LoginPage({ onLogin, onBack }: Props) {
         </div>
 
         {/* POC 演示提示 */}
-        <p style={{ margin: "18px 0 0", fontSize: 11.5, color: "#c3cdd9", textAlign: "center" }}>POC 演示：任意 11 位手机号 + 验证码（点击「获取验证码」自动填 1234）</p>
+        <p style={{ margin: "18px 0 0", fontSize: 11.5, color: "#c3cdd9", textAlign: "center" }}>POC 通路：点击「获取验证码」自动填入服务端下发的演示码（生产环境短信送达）</p>
       </div>
     </div>
   );
