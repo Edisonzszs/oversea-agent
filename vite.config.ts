@@ -4,6 +4,7 @@ import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { registerCopilot } from './src/server/copilot'
+import { registerOrch } from './src/server/orch/server'
 
 // TaxIQ SSE 流式：关闭代理缓冲，让 data: 片段实时到达
 // （token 由 registerCopilot 模块加载 .env 注入 process.env，前端源码/包零持有）
@@ -41,7 +42,10 @@ export default defineConfig({
     tailwindcss(),
     {
       name: 'compliance-copilot-proxy',
-      configureServer(server) { registerCopilot(server); },
+      configureServer(server) {
+        registerCopilot(server);
+        registerOrch(server); // M1 服务端编排（无 DATABASE_URL 时注册失败仅告警，前端自动回落本地编排）
+      },
     },
   ],
   resolve: {

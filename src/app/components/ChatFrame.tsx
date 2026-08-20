@@ -136,6 +136,26 @@ function fallbackChips(run?: AgentRunState): string[] {
   return out.length > 0 ? out : FALLBACK_CHIPS.general;
 }
 
+/* ── M1 服务端编排（2c）：SSE 优先，health 不可达自动回落本地编排（灰度保险） ── */
+const ORCH_BASE = "/api/orch";
+let orchHealthPromise: Promise<boolean> | null = null;
+function orchHealthy(): Promise<boolean> {
+  if (!orchHealthPromise) {
+    orchHealthPromise = fetch(`${ORCH_BASE}/health`).then(r => r.ok).catch(() => false);
+    // 探测失败 60s 后允许重探（服务恢复即切回）
+    orchHealthPromise.then(ok => { if (!ok) setTimeout(() => { orchHealthPromise = null; }, 60_000); });
+  }
+  return orchHealthPromise;
+}
+/** 稳定匿名 user_key（M1 无登录；M2 接真实账号替换） */
+function getUserKey(): string {
+  try {
+    let k = localStorage.getItem("chuhai:user-key");
+    if (!k) { k = "u-" + Math.random().toString(36).slice(2, 10); localStorage.setItem("chuhai:user-key", k); }
+    return k;
+  } catch { return "anon"; }
+}
+
 export function ChatFrame({ messages: initialMessages, onMessagesChange, initialQuestion, onUserMessage }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -156,6 +176,11 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
   // 记忆每轮都可能更新，若前缀跟着变会击穿整个会话历史的 DeepSeek 前缀缓存
   // （命中价 ≈ 未命中 1/10）；本轮新增事实改走当轮尾部附件，模型仍即时可见。
   const profileSnapshotRef = useRef<string | undefined>(undefined);
+  // M1 服务端编排（2c）：会话 id / 活动事件流 / 服务端取消句柄 / 服务端 run 名册
+  const convIdRef = useRef<string | null>(null);
+  const esRef = useRef<EventSource | null>(null);
+  const serverCancelRef = useRef<(() => void) | null>(null);
+  const serverRunIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [messages, loading, answerText, runs, activeRunId]);
   useEffect(() => { const el = inputRef.current; if (!el) return; el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }, [input]);
@@ -196,6 +221,105 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
         ...newMsgs.slice(0, -1).map(m => ({ role: m.role, content: m.text })),
         ...(newFacts ? [{ role: "system", content: `【本轮新增档案】${newFacts}（仅供参考，与当前问题无关时忽略）` }] : []),
       ];
+      // 事件处理（本地/服务端两路共用）：轨迹 reduce + 主气泡流式
+      const handleOrchEvent = (ev: OrchestrationEvent) => {
+        if (!localRun && ev.type === "run.started") {
+          localRun = createRunState(ev.runId, ev.messageId, ev.at);
+          setActiveRunId(ev.runId);
+        }
+        if (localRun) {
+          localRun = orchestrationReducer(localRun, ev);
+          const snap = localRun;
+          setRuns(prev => ({ ...prev, [snap.runId]: snap }));
+        }
+        if (ev.type === "task.pending") seenTaskIds.add(ev.task.id);
+        if (ev.type === "plan.completed") setPhase("running");
+        if (ev.type === "aggregation.started") { accAnswer = ""; setAnswerText(""); setPhase("aggregating"); }
+        if (ev.type === "aggregation.output.delta") {
+          accAnswer += ev.delta; setAnswerText(accAnswer); setPhase("answering");
+        }
+        // 单专家任务：专家输出直接流进主气泡（保持直连时代的流式手感）
+        if (ev.type === "task.output.delta" && seenTaskIds.size === 1) {
+          accAnswer += ev.delta; setAnswerText(accAnswer); setPhase("answering");
+        }
+        if (ev.type === "run.completed" || ev.type === "run.cancelled" || ev.type === "run.failed") setPhase("idle");
+      };
+
+      // 最终消息落定（两路共用）
+      const finalize = (output: string, cancelled = false) => {
+        const parsed = stripMarkers(output);
+        const runSnap = localRun ?? undefined;
+        // chips：模型输出优先；未输出时按参与专家兜底（保证每条专业答复都有引导话题）
+        const chips = parsed.quickQuestions.length > 0 ? parsed.quickQuestions : fallbackChips(runSnap);
+        const finalMsgs = [...newMsgs, {
+          role: "assistant" as const,
+          text: parsed.cleanContent || (cancelled ? "（已停止生成）" : "（无回复内容）"),
+          ...(runSnap ? { run: runSnap } : {}),
+          ...(chips.length > 0 ? { quickQuestions: chips } : {}),
+        }];
+        setMessages(finalMsgs);
+        onMessagesChange(finalMsgs);
+      };
+
+      let finalOutput = "";
+      let wasCancelled = false;
+      const useServer = await orchHealthy();
+
+      if (useServer) {
+        // ── 服务端编排（M1）：持久入队 → SSE 订阅（断线可从 seq 回放） ──
+        const resp = await fetch(`${ORCH_BASE}/runs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: text,
+            conv_id: convIdRef.current ?? undefined,
+            user_key: getUserKey(),
+            conversation,
+            profile_block: frozenProfile ?? null,
+          }),
+        });
+        if (!resp.ok) throw new Error(`orch 入队失败 HTTP ${resp.status}`);
+        const receipt = await resp.json() as { runId: string; convId: string };
+        convIdRef.current = receipt.convId;
+        serverRunIdsRef.current.add(receipt.runId);
+        await new Promise<void>((resolve) => {
+          const es = new EventSource(`${ORCH_BASE}/runs/${receipt.runId}/events?from=0`);
+          esRef.current = es;
+          let settled = false;
+          let terminalTimer: ReturnType<typeof setTimeout> | undefined;
+          const settle = () => {
+            if (settled) return;
+            settled = true;
+            if (terminalTimer) clearTimeout(terminalTimer);
+            es.close(); esRef.current = null; serverCancelRef.current = null;
+            resolve();
+          };
+          serverCancelRef.current = () => {
+            fetch(`${ORCH_BASE}/runs/${receipt.runId}/cancel`, { method: "POST" })
+              .catch(() => settle()); // 取消请求失败 → 兜底收尾
+          };
+          es.onmessage = (m) => {
+            let ev: OrchestrationEvent & { type: string; output?: string };
+            try { ev = JSON.parse(m.data); } catch { return; }
+            // 终局正文：run.completed 之后到达（服务端串行链保证顺序），取到即收尾
+            if (ev.type === "run.final") { finalOutput = ev.output ?? ""; settle(); return; }
+            if (ev.type === "run.completed") {
+              handleOrchEvent(ev);
+              // 兜底：run.final 丢失/引擎异常时 10s 后强制收尾（正文回落已流式的 accAnswer）
+              terminalTimer = setTimeout(settle, 10_000);
+              return;
+            }
+            if (ev.type === "run.cancelled") { wasCancelled = true; handleOrchEvent(ev); settle(); return; }
+            if (ev.type === "run.failed") { handleOrchEvent(ev); settle(); return; }
+            handleOrchEvent(ev);
+          };
+          es.onerror = () => settle();
+        });
+        finalize(finalOutput || accAnswer, wasCancelled);
+        return;
+      }
+
+      // ── 本地编排（灰度回落：服务端不可用/无后端 dev） ──
       const result = await runOrchestration({
         question: text,
         messageId: "pending",
@@ -203,43 +327,11 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
         signal: ctrl.signal,
         onEvent(ev: OrchestrationEvent) {
           if (ctrl.signal.aborted) return;
-          // 轨迹：reduce 进闭包镜像 + upsert 到渲染表
-          if (!localRun && ev.type === "run.started") {
-            localRun = createRunState(ev.runId, ev.messageId, ev.at);
-            setActiveRunId(ev.runId);
-          }
-          if (localRun) {
-            localRun = orchestrationReducer(localRun, ev);
-            const snap = localRun;
-            setRuns(prev => ({ ...prev, [snap.runId]: snap }));
-          }
-          // 气泡正文流式
-          if (ev.type === "task.pending") seenTaskIds.add(ev.task.id);
-          if (ev.type === "plan.completed") setPhase("running");
-          if (ev.type === "aggregation.started") { accAnswer = ""; setAnswerText(""); setPhase("aggregating"); }
-          if (ev.type === "aggregation.output.delta") {
-            accAnswer += ev.delta; setAnswerText(accAnswer); setPhase("answering");
-          }
-          // 单专家任务：专家输出直接流进主气泡（保持直连时代的流式手感）
-          if (ev.type === "task.output.delta" && seenTaskIds.size === 1) {
-            accAnswer += ev.delta; setAnswerText(accAnswer); setPhase("answering");
-          }
-          if (ev.type === "run.completed" || ev.type === "run.cancelled" || ev.type === "run.failed") setPhase("idle");
+          handleOrchEvent(ev);
         },
       });
-
-      const parsed = stripMarkers(result.output);
-      const runSnap = localRun ?? undefined;
-      // chips：模型输出优先；未输出时按参与专家兜底（保证每条专业答复都有引导话题）
-      const chips = parsed.quickQuestions.length > 0 ? parsed.quickQuestions : fallbackChips(runSnap);
-      const finalMsgs = [...newMsgs, {
-        role: "assistant" as const,
-        text: parsed.cleanContent || "（无回复内容）",
-        ...(runSnap ? { run: runSnap } : {}),
-        ...(chips.length > 0 ? { quickQuestions: chips } : {}),
-      }];
-      setMessages(finalMsgs);
-      onMessagesChange(finalMsgs);
+      finalOutput = result.output;
+      finalize(finalOutput);
     } catch (e: any) {
       if (e?.name === "AbortError" || ctrl.signal.aborted) {
         // 用户点「停止生成」:保留已流式输出的部分与轨迹
@@ -253,18 +345,45 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
       }
     } finally {
       setLoading(false); setPhase("idle"); setAnswerText(""); setActiveRunId(null);
+      serverCancelRef.current = null;
     }
   };
 
-  // 单任务重试：重试事件仍走原 run 的 onEvent → runs 表 live 更新（消息上的旧快照被覆盖渲染）
+  // 单任务重试：重试事件仍走原 run → runs 表 live 更新（消息上的旧快照被覆盖渲染）。
+  // 服务端 run：POST retry + 重开 SSE 从 seq 0 回放整个 run 到轨迹（跨刷新也能重试）。
   const handleRetryTask = async (runId: string, taskId: string) => {
+    if (serverRunIdsRef.current.has(runId)) {
+      try {
+        const r = await fetch(`${ORCH_BASE}/runs/${runId}/tasks/${taskId}/retry`, { method: "POST" });
+        if (!r.ok) return;
+      } catch { return; }
+      // 回放重建 run 轨迹镜像（含重试后的新事件；连接保持以接收后续事件）
+      let mirror: AgentRunState | null = null;
+      const es = new EventSource(`${ORCH_BASE}/runs/${runId}/events?from=0`);
+      es.onmessage = (m) => {
+        let ev: OrchestrationEvent & { type: string };
+        try { ev = JSON.parse(m.data); } catch { return; }
+        if (ev.type === "run.final") return;
+        if (!mirror && ev.type === "run.started") mirror = createRunState(ev.runId, ev.messageId, ev.at);
+        if (mirror) {
+          mirror = orchestrationReducer(mirror, ev);
+          const snap = mirror;
+          setRuns(prev => ({ ...prev, [snap.runId]: snap }));
+        }
+      };
+      es.onerror = () => es.close();
+      return;
+    }
     try { await retryOrchestrationTask(runId, taskId); } catch { /* 运行已过期（刷新/新会话）则忽略 */ }
   };
 
   const isEmpty = messages.length === 0 && !loading;
 
-  // 停止生成(中断流式输出,保留已生成部分)
-  const stopStream = () => { try { abortRef.current?.abort(); } catch {} };
+  // 停止生成：服务端 run → 请求取消（run.cancelled 事件收尾流）；本地 run → abort
+  const stopStream = () => {
+    if (serverCancelRef.current) { serverCancelRef.current(); return; }
+    try { abortRef.current?.abort(); } catch {}
+  };
 
   // 门户首页携带问题:挂载后自动发送一次(仅一次)
   const seededRef = useRef(false);
