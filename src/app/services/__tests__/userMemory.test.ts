@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { loadUserMemory, saveUserMemory, USER_MEMORY_KEY, buildMemorySummary } from '../userMemoryStorage'
-import { extractMemoryFacts } from '../userMemoryExtract'
+import { extractMemoryFacts, diffMemoryFacts } from '../userMemoryExtract'
 import type { UserMemory } from '../userMemoryStorage'
 
 const empty: UserMemory = { destinations: [], notes: [] }
@@ -32,5 +32,25 @@ describe('extractMemoryFacts', () => {
     const m2 = extractMemoryFacts('新加坡呢', m)
     expect(m2.destinations).toEqual(expect.arrayContaining(['越南', '新加坡']))
     expect(m2.destinations).toHaveLength(2)
+  })
+})
+
+describe('diffMemoryFacts（R1 缓存纪律：本轮新增事实摘要）', () => {
+  it('无新事实 → 空串（不产生尾部附件）', () => {
+    const m = extractMemoryFacts('我想去越南设厂', empty)
+    expect(diffMemoryFacts(m, extractMemoryFacts('越南企业所得税是多少', m))).toBe('')
+  })
+  it('新增目的地被检出并顿号连接（按 COUNTRY_115 表序）', () => {
+    const m = extractMemoryFacts('去过越南', empty)
+    const m2 = extractMemoryFacts('再去新加坡和泰国', m)
+    expect(diffMemoryFacts(m, m2)).toBe('目的地：泰国、新加坡')
+  })
+  it('行业/公司首次出现被检出', () => {
+    const m2 = extractMemoryFacts('我们公司是华为技术，做新能源汽车', empty)
+    expect(diffMemoryFacts(empty, m2)).toBe('行业：新能源汽车；公司：华为技术')
+  })
+  it('既有事实重复提及不误报', () => {
+    const m = extractMemoryFacts('我们公司是华为技术', empty)
+    expect(diffMemoryFacts(m, extractMemoryFacts('华为技术在越南的税负', m))).toBe('目的地：越南')
   })
 })

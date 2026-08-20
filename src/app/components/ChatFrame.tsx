@@ -11,7 +11,7 @@ import { orchestrationReducer, createRunState } from "../orchestration/reducer";
 import type { AgentRunState, OrchestrationEvent } from "../orchestration/types";
 import { stripMarkers } from "../services/intentDetector";
 import { loadUserMemory, saveUserMemory, buildMemorySummary } from "../services/userMemoryStorage";
-import { extractMemoryFacts } from "../services/userMemoryExtract";
+import { extractMemoryFacts, diffMemoryFacts } from "../services/userMemoryExtract";
 import { AgentRunTrace } from "./agent-run/AgentRunTrace";
 
 // 轻量 Markdown 渲染：标题(##/###)、无序/有序列表、分隔线(---/--/—)、**粗体**、*斜体*、`代码`。
@@ -152,6 +152,10 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null); // 停止生成(中断流式输出)
+  // R1 缓存纪律：用户档案前缀在会话首个问题时冻结（组件挂载周期 = 一次会话）。
+  // 记忆每轮都可能更新，若前缀跟着变会击穿整个会话历史的 DeepSeek 前缀缓存
+  // （命中价 ≈ 未命中 1/10）；本轮新增事实改走当轮尾部附件，模型仍即时可见。
+  const profileSnapshotRef = useRef<string | undefined>(undefined);
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [messages, loading, answerText, runs, activeRunId]);
   useEffect(() => { const el = inputRef.current; if (!el) return; el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }, [input]);
@@ -176,14 +180,21 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
     abortRef.current = ctrl;
 
     try {
-      // 用户记忆：正则抽取（国别/行业/公司）→ 落盘 → 以【用户档案】system 消息注入对话上下文
-      // （咨询/ODI 智能体把 conversation 透传给模型；TaxIQ 只用 question，不受影响）
-      const memory = extractMemoryFacts(text, loadUserMemory());
-      saveUserMemory(memory);
-      const memSummary = buildMemorySummary(memory);
+      // 用户记忆（R1 缓存纪律）：抽取落盘不变；注入拆成两段——
+      // ① 冻结档案（会话首个问题时快照，作稳定前缀）② 本轮新增事实（尾部附件，
+      // 位于全部历史之后不影响前缀缓存）。TaxIQ 只用 question，不受影响。
+      const beforeMemory = loadUserMemory();
+      const afterMemory = extractMemoryFacts(text, beforeMemory);
+      saveUserMemory(afterMemory);
+      if (profileSnapshotRef.current === undefined) {
+        profileSnapshotRef.current = buildMemorySummary(beforeMemory);
+      }
+      const frozenProfile = profileSnapshotRef.current;
+      const newFacts = diffMemoryFacts(beforeMemory, afterMemory);
       const conversation = [
-        ...(memSummary ? [{ role: "system", content: `【用户档案】${memSummary}（仅供参考，与当前问题无关时忽略）` }] : []),
+        ...(frozenProfile ? [{ role: "system", content: `【用户档案】${frozenProfile}（仅供参考，与当前问题无关时忽略）` }] : []),
         ...newMsgs.slice(0, -1).map(m => ({ role: m.role, content: m.text })),
+        ...(newFacts ? [{ role: "system", content: `【本轮新增档案】${newFacts}（仅供参考，与当前问题无关时忽略）` }] : []),
       ];
       const result = await runOrchestration({
         question: text,

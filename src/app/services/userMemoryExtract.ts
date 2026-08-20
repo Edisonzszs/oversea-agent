@@ -22,3 +22,17 @@ export function extractMemoryFacts(text: string, current: UserMemory): UserMemor
     notes: current.notes,
   }
 }
+
+/**
+ * 本轮新增事实摘要（R1 缓存纪律，docs/design/m1-backend-draft.md）：
+ * 档案前缀在会话开始时冻结（记忆每轮变化会击穿整个会话历史的 DeepSeek 前缀缓存），
+ * 本轮新抽取的事实以增量摘要形式走当轮尾部附件——位于全部历史之后，不影响缓存前缀。
+ */
+export function diffMemoryFacts(before: UserMemory, after: UserMemory): string {
+  const parts: string[] = []
+  const newDestinations = after.destinations.filter((d) => !before.destinations.includes(d))
+  if (newDestinations.length) parts.push(`目的地：${newDestinations.join('、')}`)
+  if (after.industry && after.industry !== before.industry) parts.push(`行业：${after.industry}`)
+  if (after.company && after.company !== before.company) parts.push(`公司：${after.company}`)
+  return parts.join('；')
+}
