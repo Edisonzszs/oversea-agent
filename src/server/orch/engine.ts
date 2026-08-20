@@ -120,15 +120,21 @@ export class RunEngine {
         deps: {
           runId: () => runId,
           registry: createServerRegistry(convId),
-          planner: (q, signal) =>
-            createExecutionPlan(q, signal, {
-              completeJson: async (prompt, signal2) =>
-                (await serverJsonComplete({
+          planner: async (q, signal) => {
+            const plan = await createExecutionPlan(q, signal, {
+              completeJson: async (prompt, signal2) => {
+                const r = await serverJsonComplete({
                   systemPrompt: ORCHESTRATOR_PLANNER_PROMPT,
                   userPrompt: prompt,
                   signal: signal2,
-                })).value,
-            }),
+                });
+                console.log(`[orch] planner 原始返回: ${JSON.stringify(r.value).slice(0, 200)}`);
+                return r.value;
+              },
+            }, { conversation });
+            console.log(`[orch] plan=${plan.intent} tasks=${plan.tasks.length} convLen=${conversation.length}`);
+            return plan;
+          },
           aggregate: (options) =>
             aggregateResults({
               ...options,

@@ -21,6 +21,8 @@ interface Props {
   onEnterCompliance?: () => void;
   user?: { userName: string; userType: string; certStatus: string } | null;
   onLogin?: () => void;
+  /** M1（2d）服务端会话（本机真实问答产生，事件日志落库） */
+  serverConversations?: ConversationItem[];
 }
 
 function MoreMenu({ favorite, onRename, onFavorite, onDelete }: { favorite: boolean; onRename: () => void; onFavorite: () => void; onDelete: () => void }) {
@@ -224,10 +226,11 @@ function BrandMark() {
  * 3. 按钮微交互：hover scale 1.05，CSS transition 120-160ms
  *    触发：mouseenter/mouseleave | 时长：130ms | ease: CSS ease | 降级：无变化
  */
-export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId, onSelectConversation, onNewConversation, onEnterOdiWorkbench, pendingOdiCount, onEnterCompliance, user, onLogin }: Props) {
+export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId, onSelectConversation, onNewConversation, onEnterOdiWorkbench, pendingOdiCount, onEnterCompliance, user, onLogin, serverConversations }: Props) {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [toolboxOpen, setToolboxOpen] = useState(true);
   const [favOpen, setFavOpen] = useState(true);
+  const [mineOpen, setMineOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userAreaRef = useRef<HTMLDivElement>(null);
@@ -421,6 +424,14 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
 
         {/* 会话列表 */}
         <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", paddingTop: 2, paddingBottom: 6 }}>
+          {(serverConversations?.length ?? 0) > 0 && (
+            <>
+              {sectionLabel("我的对话", mineOpen, () => setMineOpen(v => !v), serverConversations!.length)}
+              {mineOpen && serverConversations!.map(conv => (
+                <ConvItem key={conv.id} conv={conv} active={conv.id === activeConvId} onSelect={() => onSelectConversation(conv.id)} onToggleFavorite={() => { /* 服务端会话收藏 M2 接 */ }} />
+              ))}
+            </>
+          )}
           {favorites.length > 0 && (
             <>
               {sectionLabel("收藏对话", favOpen, () => setFavOpen(v => !v), favorites.length)}

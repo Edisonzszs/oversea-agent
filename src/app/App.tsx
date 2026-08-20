@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Flip } from "gsap/Flip";
@@ -9,7 +9,9 @@ import { PlatformTopBar, type PlatformAuthState } from "./components/PlatformTop
 import { PlatformNavBar } from "./components/PlatformNavBar";
 import { WelcomeFrame } from "./components/WelcomeFrame";
 import { ChatFrame } from "./components/ChatFrame";
-import { CONVERSATIONS } from "./components/conversationData";
+import { CONVERSATIONS, type ConversationItem } from "./components/conversationData";
+import { getUserKey } from "./services/userKey";
+import type { ChatMessage } from "./components/conversationData";
 import { OdiQaFrame } from "./components/OdiQaFrame";
 import { OdiWorkbenchFrame } from "./components/OdiWorkbenchFrame";
 import { OdiDaibanPage } from "./components/OdiDaibanPage";
@@ -73,6 +75,25 @@ export default function App() {
   const [frame, setFrame] = useState<AppFrame>("chat");
   // Conversation state
   const [activeConvId, setActiveConvId] = useState("new");
+  // M1（2d）服务端会话：侧边栏"我的对话" + 历史消息缓存（按需拉取）
+  const [serverConvs, setServerConvs] = useState<ConversationItem[]>([]);
+  const [serverConvMessages, setServerConvMessages] = useState<Record<string, ChatMessage[]>>({});
+
+  const refreshServerConvs = async () => {
+    try {
+      const r = await fetch(`/api/orch/conversations?user_key=${encodeURIComponent(getUserKey())}`);
+      if (!r.ok) return;
+      const data = await r.json() as { conversations: Array<{ id: string; title: string | null; updated_at: string }> };
+      setServerConvs(data.conversations.map(c => ({
+        id: c.id,
+        title: c.title || "新对话",
+        updatedAt: fmtRelative(c.updated_at),
+        favorite: false,
+        isOdiRelated: false,
+      })));
+    } catch { /* 服务端不可用 → 保持本地演示列表 */ }
+  };
+  useEffect(() => { if (mode === "xiaohai") void refreshServerConvs(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [mode]);
 
   // Sidebar collapse state
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -430,7 +451,17 @@ export default function App() {
       : `关于 ODI 助办项目「${assistantCtx.projectName}」：帮我梳理当前进度、待处理问题和下一步建议。`
     : null;
 
-  const handleSelectConversation = (id: string) => {
+  const handleSelectConversation = async (id: string) => {
+    // 服务端会话（c- 前缀）：先拉历史消息再挂 ChatFrame（initialMessages 需挂载时即就绪）
+    if (id.startsWith("c-") && !serverConvMessages[id]) {
+      try {
+        const r = await fetch(`/api/orch/conversations/${id}/messages`);
+        if (r.ok) {
+          const data = await r.json() as { messages: Array<{ role: string; content: string; meta?: { run_id?: string } | null }> };
+          setServerConvMessages(prev => ({ ...prev, [id]: data.messages.map(m => ({ role: m.role as "user" | "assistant", text: m.content })) }));
+        }
+      } catch { /* 拉取失败按空历史打开 */ }
+    }
     setActiveConvId(id);
     setChatSeed(null); // 切走即清携带问题,避免残留 seed 影响后续新对话
     setSearchKeyword("");
@@ -445,6 +476,18 @@ export default function App() {
     setMode("xiaohai");
     setFrame("chat");
   };
+
+  /** 相对时间（侧边栏"我的对话" updatedAt 展示） */
+  function fmtRelative(iso: string): string {
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return "";
+    const diff = Date.now() - t;
+    if (diff < 2 * 60_000) return "刚刚";
+    if (diff < 60 * 60_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+    if (diff < 24 * 60 * 60_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+    if (diff < 48 * 60 * 60_000) return "昨天";
+    return new Date(t).toLocaleDateString("zh-CN");
+  }
 
   const handlePreInfoConfirm = () => { setPreInfoConfirmed(true); setFrame("odi-materials"); };
   const handleContinueUpload = () => setFrame("odi-project");
@@ -522,6 +565,7 @@ export default function App() {
             onEnterCompliance={handleEnterCompliance}
             user={authUser}
             onLogin={enterLogin}
+            serverConversations={serverConvs}
           />
         )}
         {(mode === "odi-list" || mode === "odi-project" || mode === "odi-demo") && (
@@ -569,11 +613,15 @@ export default function App() {
               {frame === "chat" && (
                 <ChatFrame
                   key={activeConvId === "new" && chatSeed ? `new-${chatSeed.nonce}` : activeConvId}
-                  messages={activeConvId === "new" ? [] : (CONVERSATIONS.find(c => c.id === activeConvId)?.messages) ?? []}
+                  messages={activeConvId === "new"
+                    ? []
+                    : serverConvMessages[activeConvId] ?? (CONVERSATIONS.find(c => c.id === activeConvId)?.messages) ?? []}
                   onMessagesChange={(msgs) => { /* 实时更新由 ChatFrame 内部管理，预留接口 */ }}
                   onTitleUpdate={(title) => { /* 预留：更新对话标题 */ }}
                   initialQuestion={activeConvId === "new" && chatSeed ? chatSeed.q : undefined}
                   onUserMessage={handleChatUserMessage}
+                  convId={activeConvId.startsWith("c-") ? activeConvId : undefined}
+                  onConversationCreated={() => { void refreshServerConvs(); }}
                 />
               )}
               {frame === "welcome" && <WelcomeFrame goTo={goTo} onOdiAssistClick={() => setFrame("chat")} />}

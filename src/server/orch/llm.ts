@@ -106,6 +106,16 @@ export async function serverStreamChat(options: ServerStreamOptions): Promise<Se
   return { content, usage };
 }
 
+/** 从模型输出提取首个 JSON 对象（容忍 markdown 围栏/前后缀说明文字）。 */
+function extractJson(text: string): unknown {
+  const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  try { return JSON.parse(t); } catch { /* 继续按花括号截取 */ }
+  const s = t.indexOf("{");
+  const e = t.lastIndexOf("}");
+  if (s >= 0 && e > s) return JSON.parse(t.slice(s, e + 1));
+  throw new Error(`模型输出非 JSON：${text.slice(0, 120)}`);
+}
+
 /** 非流式 JSON 请求（planner 用）：返回解析后的 JSON 对象与用量。 */
 export async function serverJsonComplete(args: {
   systemPrompt: string; userPrompt: string; signal?: AbortSignal;
@@ -116,6 +126,10 @@ export async function serverJsonComplete(args: {
     jsonMode: true,
     signal: args.signal,
   });
-  try { return { value: JSON.parse(r.content), usage: r.usage }; }
-  catch { throw new Error("模型服务返回异常响应（非 JSON）"); }
+  try {
+    return { value: extractJson(r.content), usage: r.usage };
+  } catch (e) {
+    console.error("[orch] JSON 请求解析失败:", (e as Error).message);
+    throw e;
+  }
 }

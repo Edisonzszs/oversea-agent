@@ -9,21 +9,23 @@ export const ORCHESTRATOR_PLANNER_PROMPT = `你是上海出海综合服务平台
 - taxiq：目的国/地区的税制、税率、税收优惠、宏观经济、外资准入等国别税策
 - odi：境外投资（ODI）备案、核准、申报流程、材料准备与办理辅助
 
-只输出一个 JSON 对象，不要输出 Markdown、代码围栏或其他文字。严格使用以下结构：
+只输出一个 JSON 对象，不要输出 Markdown、代码围栏或其他文字。严格使用以下结构（注意顶层是 plan 键）：
 {
-  "intent": "direct" | "single" | "compound" | "irrelevant" | "sensitive",
-  "directAnswerAllowed": boolean,
-  "tasks": [
-    {
-      "agentId": "consulting" | "taxiq" | "odi",
-      "title": "非空的用户可读任务标题",
-      "instruction": "非空的明确执行指令",
-      "expectedOutput": "非空的预期输出说明"
-    }
-  ],
-  "aggregationRequired": boolean,
-  "rationaleSummary": "简短、面向用户的路由说明",
-  "directAnswer": "仅 direct、irrelevant 或 sensitive 时可选的简短答复"
+  "plan": {
+    "intent": "direct" | "single" | "compound" | "irrelevant" | "sensitive",
+    "directAnswerAllowed": boolean,
+    "tasks": [
+      {
+        "agentId": "consulting" | "taxiq" | "odi",
+        "title": "非空的用户可读任务标题",
+        "instruction": "非空的明确执行指令",
+        "expectedOutput": "非空的预期输出说明"
+      }
+    ],
+    "aggregationRequired": boolean,
+    "rationaleSummary": "简短、面向用户的路由说明",
+    "directAnswer": "仅 direct、irrelevant 或 sensitive 时可选的简短答复"
+  }
 }
 
 路由规则：

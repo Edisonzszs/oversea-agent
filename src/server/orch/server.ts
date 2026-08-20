@@ -36,6 +36,10 @@ function readBody(req: http.IncomingMessage, limit = 2 * 1024 * 1024): Promise<s
   });
 }
 
+function safeParse(s: string): unknown {
+  try { return JSON.parse(s); } catch { return s; }
+}
+
 export async function createOrchHandler() {
   const db: Db = await openDb();
   const engine = new RunEngine(db);
@@ -94,6 +98,55 @@ export async function createOrchHandler() {
         },
       );
       req.on("close", () => unsubscribe());
+      return true;
+    }
+
+    // GET /conversations?user_key= —— 会话列表（2d：前端侧边栏从服务端读）
+    if (req.method === "GET" && pathname === "/conversations") {
+      const userKey = url.searchParams.get("user_key") || "anon";
+      const r = await db.query(
+        `SELECT c.id, c.title, c.updated_at,
+                (SELECT count(*) FROM messages m WHERE m.conv_id = c.id) AS message_count
+         FROM conversations c WHERE c.user_key = $1
+         ORDER BY c.updated_at DESC NULLS LAST LIMIT 30`,
+        [userKey],
+      );
+      json(res, 200, { conversations: r.rows });
+      return true;
+    }
+
+    // GET /conversations/:id/messages —— 历史消息（按 seq 升序，含 meta）
+    const convMsgsMatch = pathname.match(/^\/conversations\/([^/]+)\/messages$/);
+    if (req.method === "GET" && convMsgsMatch) {
+      const r = await db.query(
+        `SELECT seq, role, content, meta FROM messages WHERE conv_id = $1 ORDER BY seq`,
+        [convMsgsMatch[1]!],
+      );
+      json(res, 200, {
+        messages: r.rows.map((row: any) => ({
+          role: row.role, content: row.content,
+          meta: typeof row.meta === "string" ? safeParse(row.meta) : row.meta,
+        })),
+      });
+      return true;
+    }
+
+    // GET /runs/:id/audit —— 全链路审计导出（政务留痕：run + tasks + 事件时间线）
+    const auditMatch = pathname.match(/^\/runs\/([^/]+)\/audit$/);
+    if (req.method === "GET" && auditMatch) {
+      const runId = auditMatch[1]!;
+      const run = await db.query(`SELECT * FROM agent_runs WHERE id = $1`, [runId]);
+      if (!run.rows.length) { json(res, 404, { error: "run 不存在" }); return true; }
+      const tasks = await db.query(`SELECT * FROM agent_tasks WHERE run_id = $1 ORDER BY started_at NULLS LAST`, [runId]);
+      const events = await db.query(
+        `SELECT seq, type, task_id, payload, created_at FROM agent_events WHERE run_id = $1 ORDER BY seq`, [runId],
+      );
+      const parseMaybe = (v: unknown) => (typeof v === "string" ? safeParse(v) : v);
+      json(res, 200, {
+        run: Object.fromEntries(Object.entries(run.rows[0]!).map(([k, v]) => [k, ["plan", "usage"].includes(k) ? parseMaybe(v) : v])),
+        tasks: tasks.rows.map((t: any) => ({ ...t, sources: parseMaybe(t.sources), usage: parseMaybe(t.usage) })),
+        events: events.rows.map((e: any) => ({ ...e, payload: parseMaybe(e.payload) })),
+      });
       return true;
     }
 

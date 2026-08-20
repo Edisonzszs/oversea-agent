@@ -43,6 +43,56 @@ function signal(): AbortSignal {
 }
 
 describe("validatePlan", () => {
+  it("accepts flat plan objects without the plan wrapper (模型省略外层键的兼容)", () => {
+    const flat = {
+      intent: "single",
+      directAnswerAllowed: false,
+      tasks: [
+        { agentId: "taxiq", title: "国别税策分析", instruction: "分析税制", expectedOutput: "要点" },
+      ],
+      aggregationRequired: false,
+      rationaleSummary: "纯税务问题",
+    };
+    const plan = validatePlan(flat);
+    expect(plan.intent).toBe("single");
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0]!.agentId).toBe("taxiq");
+  });
+
+  it("normalizes self-inconsistent compound plans (compound 单任务 → single)", () => {
+    const plan = validatePlan({
+      intent: "compound",
+      directAnswerAllowed: false,
+      tasks: [
+        { agentId: "taxiq", title: "国别税策分析", instruction: "分析税制", expectedOutput: "要点" },
+      ],
+      aggregationRequired: true,
+      rationaleSummary: "税策问题",
+      directAnswer: "",
+    });
+    expect(plan.intent).toBe("single");
+    expect(plan.aggregationRequired).toBe(false);
+    expect(plan.directAnswer).toBeUndefined();
+  });
+
+  it("treats empty-string/null directAnswer placeholders as absent (模型占位兼容)", () => {    for (const placeholder of ["", null]) {
+      const plan = validatePlan({
+        intent: "compound",
+        directAnswerAllowed: false,
+        tasks: [
+          { agentId: "taxiq", title: "国别税策分析", instruction: "分析税制", expectedOutput: "要点" },
+          { agentId: "odi", title: "ODI办理指引", instruction: "说明流程", expectedOutput: "路径" },
+        ],
+        aggregationRequired: true,
+        rationaleSummary: "多领域并行",
+        directAnswer: placeholder,
+      });
+      expect(plan.directAnswer).toBeUndefined();
+      expect(plan.intent).toBe("compound");
+    }
+  });
+
+
   it.each([
     directPlan,
     {
@@ -179,13 +229,6 @@ describe("validatePlan", () => {
       rationaleSummary: "矛盾的单任务。",
     },
     {
-      intent: "compound",
-      directAnswerAllowed: false,
-      tasks: [consultingTask, taxiqTask],
-      aggregationRequired: false,
-      rationaleSummary: "矛盾的聚合设置。",
-    },
-    {
       intent: "irrelevant",
       directAnswerAllowed: true,
       tasks: [consultingTask],
@@ -194,6 +237,20 @@ describe("validatePlan", () => {
     },
   ])("rejects contradictory plans", (plan) => {
     expect(() => validatePlan(plan)).toThrow(/intent|任务|tasks|aggregation/i);
+  });
+
+  it("normalizes compound plans missing aggregationRequired (模型漏配 → 确定性纠正)", () => {
+    const plan = validatePlan({
+      intent: "compound",
+      directAnswerAllowed: false,
+      tasks: [consultingTask, taxiqTask],
+      aggregationRequired: false,
+      rationaleSummary: "矛盾的聚合设置。",
+      directAnswer: "",
+    });
+    expect(plan.intent).toBe("compound");
+    expect(plan.aggregationRequired).toBe(true);
+    expect(plan.tasks).toHaveLength(2);
   });
 });
 

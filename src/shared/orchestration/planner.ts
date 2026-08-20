@@ -35,14 +35,20 @@ export const deepseekPlannerDeps: PlannerDeps = {
   },
 }
 
+export interface PlannerConversationOptions {
+  /** 近期会话上下文（2d 追问路由用：如"那新加坡呢"需借历史判 taxiq） */
+  conversation?: Array<{ role: string; content: string }>
+}
+
 export async function createExecutionPlan(
   question: string,
   signal: AbortSignal,
   deps: PlannerDeps,
+  options?: PlannerConversationOptions,
 ): Promise<ExecutionPlan> {
   if (signal.aborted) throw signal.reason
   try {
-    const value = await deps.completeJson(buildPlannerInput(question), signal)
+    const value = await deps.completeJson(buildPlannerInput(question, options?.conversation), signal)
     if (signal.aborted) throw signal.reason
     return validatePlan(value)
   } catch (error) {
@@ -50,12 +56,17 @@ export async function createExecutionPlan(
       throw signal.reason !== undefined ? signal.reason : error
     }
     if (isAbortError(error)) throw error
+    if (typeof console !== 'undefined') {
+      console.warn('[planner] 模型计划校验失败，走正则兜底:', (error as Error)?.message)
+    }
     return createFallbackPlan(question)
   }
 }
 
 export function validatePlan(value: unknown): ExecutionPlan {
-  const plan = requireRecord(value, 'plan')
+  // 兼容两种模型输出：{"plan":{...}}（提示词口径）与扁平 {...}（模型常见省略）
+  const root = requireRecord(value, '模型输出')
+  const plan = 'plan' in root ? requireRecord(root.plan, 'plan') : root
   assertExactKeys(
     plan,
     [
@@ -68,12 +79,12 @@ export function validatePlan(value: unknown): ExecutionPlan {
     ],
     'plan',
   )
-  const intent = requireIntent(plan.intent)
+  let intent = requireIntent(plan.intent)
   const directAnswerAllowed = requireBoolean(
     plan.directAnswerAllowed,
     'directAnswerAllowed',
   )
-  const aggregationRequired = requireBoolean(
+  let aggregationRequired = requireBoolean(
     plan.aggregationRequired,
     'aggregationRequired',
   )
@@ -100,9 +111,22 @@ export function validatePlan(value: unknown): ExecutionPlan {
   })
   validateTaskOrder(tasks)
 
+  // directAnswer 语义上是可选字段：模型常以 ""/null 占位（尤其 compound 计划），视同缺省
+  const rawDirectAnswer = plan.directAnswer
   let directAnswer: string | undefined
-  if (plan.directAnswer !== undefined) {
-    directAnswer = requireNonEmptyString(plan.directAnswer, 'directAnswer')
+  if (typeof rawDirectAnswer === 'string' && rawDirectAnswer.trim()) {
+    directAnswer = requireNonEmptyString(rawDirectAnswer, 'directAnswer')
+  }
+
+  // 模型常见不自洽输出：compound 只配 1 任务 / compound 漏 aggregationRequired ——
+  // 确定性纠正而非整体弃用（弃用会让 LLM 规划长期退化为正则兜底）
+  if (intent === 'single' || intent === 'compound') {
+    if (tasks.length === 1) {
+      intent = 'single'
+      aggregationRequired = false
+    } else if (tasks.length >= 2 && !aggregationRequired) {
+      aggregationRequired = true
+    }
   }
 
   validateIntentShape({
@@ -224,8 +248,16 @@ export function createFallbackPlan(question: string): ExecutionPlan {
   }
 }
 
-function buildPlannerInput(question: string): string {
-  return `请为以下用户问题生成执行计划。\n\n用户问题：${question}`
+function buildPlannerInput(
+  question: string,
+  conversation?: Array<{ role: string; content: string }>,
+): string {
+  const hist = (conversation ?? [])
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .slice(-6)
+    .map(m => `${m.role === 'user' ? '用户' : '助手'}：${m.content.replace(/\s+/g, ' ').slice(0, 120)}`)
+    .join('\n')
+  return `请为以下用户问题生成执行计划。\n\n用户问题：${question}${hist ? `\n\n近期会话上下文（仅供理解指代与省略，规划以用户问题为准）：\n${hist}` : ''}`
 }
 
 function requireRecord(value: unknown, path: string): Record<string, unknown> {

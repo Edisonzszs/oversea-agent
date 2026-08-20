@@ -23,6 +23,7 @@ import type {
 type Planner = (
   question: string,
   signal: AbortSignal,
+  conversation?: Array<{ role: string; content: string }>,
 ) => Promise<ExecutionPlan>;
 type Aggregator = (options: AggregateResultsOptions) => Promise<string>;
 
@@ -102,7 +103,7 @@ export async function runOrchestration(
     emit<Extract<OrchestrationEvent, { type: "plan.started" }>>({
       type: "plan.started",
     });
-    const plan = await planner(options.question, options.signal);
+    const plan = await planner(options.question, options.signal, options.conversation);
     throwIfAborted(options.signal);
     emit<Extract<OrchestrationEvent, { type: "plan.completed" }>>({
       type: "plan.completed",

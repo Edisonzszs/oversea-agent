@@ -12,6 +12,7 @@ import type { AgentRunState, OrchestrationEvent } from "../../shared/orchestrati
 import { stripMarkers } from "../services/intentDetector";
 import { loadUserMemory, saveUserMemory, buildMemorySummary } from "../services/userMemoryStorage";
 import { extractMemoryFacts, diffMemoryFacts } from "../services/userMemoryExtract";
+import { getUserKey } from "../services/userKey";
 import { AgentRunTrace } from "./agent-run/AgentRunTrace";
 
 // 轻量 Markdown 渲染：标题(##/###)、无序/有序列表、分隔线(---/--/—)、**粗体**、*斜体*、`代码`。
@@ -118,6 +119,10 @@ interface Props {
   initialQuestion?: string;
   /** 用户发出消息(含携带问题自动发送):App 层据此识别「帮忙搜索网站」等显式请求 */
   onUserMessage?: (text: string) => void;
+  /** 服务端会话 id（2d 续聊）：提供时新问题并入该会话，而非新建 */
+  convId?: string;
+  /** 服务端会话被创建时通知 App（刷新侧边栏"我的对话"） */
+  onConversationCreated?: (convId: string, title: string) => void;
 }
 
 type Phase = "idle" | "planning" | "running" | "aggregating" | "answering";
@@ -147,16 +152,9 @@ function orchHealthy(): Promise<boolean> {
   }
   return orchHealthPromise;
 }
-/** 稳定匿名 user_key（M1 无登录；M2 接真实账号替换） */
-function getUserKey(): string {
-  try {
-    let k = localStorage.getItem("chuhai:user-key");
-    if (!k) { k = "u-" + Math.random().toString(36).slice(2, 10); localStorage.setItem("chuhai:user-key", k); }
-    return k;
-  } catch { return "anon"; }
-}
+/** 稳定匿名 user_key（M1 无登录；M2 接真实账号替换）——实现在 services/userKey.ts */
 
-export function ChatFrame({ messages: initialMessages, onMessagesChange, initialQuestion, onUserMessage }: Props) {
+export function ChatFrame({ messages: initialMessages, onMessagesChange, initialQuestion, onUserMessage, convId, onConversationCreated }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [interim, setInterim] = useState("");
@@ -177,7 +175,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
   // （命中价 ≈ 未命中 1/10）；本轮新增事实改走当轮尾部附件，模型仍即时可见。
   const profileSnapshotRef = useRef<string | undefined>(undefined);
   // M1 服务端编排（2c）：会话 id / 活动事件流 / 服务端取消句柄 / 服务端 run 名册
-  const convIdRef = useRef<string | null>(null);
+  const convIdRef = useRef<string | null>(convId ?? null);
   const esRef = useRef<EventSource | null>(null);
   const serverCancelRef = useRef<(() => void) | null>(null);
   const serverRunIdsRef = useRef<Set<string>>(new Set());
@@ -282,6 +280,7 @@ export function ChatFrame({ messages: initialMessages, onMessagesChange, initial
         const receipt = await resp.json() as { runId: string; convId: string };
         convIdRef.current = receipt.convId;
         serverRunIdsRef.current.add(receipt.runId);
+        onConversationCreated?.(receipt.convId, text.slice(0, 20));
         await new Promise<void>((resolve) => {
           const es = new EventSource(`${ORCH_BASE}/runs/${receipt.runId}/events?from=0`);
           esRef.current = es;
