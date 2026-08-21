@@ -39,8 +39,7 @@ function greeting(projectName?: string): ChatMessage {
     id: "intro",
     role: "assistant",
     text: `我是沪航者,ODI 备案伴填助手。${projectName ? `当前项目:【${projectName}】。` : ""}
-说说您在 ODI 备案里遇到的问题——字段怎么填、填报口径、备案流程、所需材料、商务委/发改委差异,我帮您解答。
-(字段自动抽取与「确认填入」将在填报演示流程内开放。)`,
+说说您在 ODI 备案里遇到的问题——字段怎么填、填报口径、备案流程、所需材料、商务委/发改委差异,我帮您解答。`,
   };
 }
 

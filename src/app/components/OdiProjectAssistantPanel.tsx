@@ -3,7 +3,10 @@ import { useState } from "react";
 export type AssistantContext =
   | { type: "project"; projectId: string; projectName: string }
   | { type: "material"; projectId: string; projectName: string; materialId: string; materialName: string }
-  | { type: "issue"; projectId: string; projectName: string; issueId: string; issueName: string; department: string; fieldCode?: string };
+  // 单条校验问题:携带点击位置的字段与校验结论,seed 据此生成(去写死)
+  | { type: "issue"; projectId: string; projectName: string; issueId: string; issueName: string; department: string; fieldCode?: string; field?: string; conclusion?: string; evidence?: string; suggestion?: string }
+  // 整批校验结果:携带当前部门/全部问题列表,seed 逐项列出
+  | { type: "validation"; projectId: string; projectName: string; issues: Array<{ field: string; department: string; conclusion: string; evidence?: string; suggestion?: string }> };
 
 interface Props {
   collapsed: boolean;
@@ -39,11 +42,13 @@ function ContextTag({ context, demo }: { context: AssistantContext; demo: boolea
     project:  { color: demo ? "#92400e" : "#1a5bc6",  background: demo ? "#fff7ed" : "#eff6ff", border: `1px solid ${demo ? "#fde68a" : "#bfdbfe"}` },
     material: { color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0" },
     issue:    { color: "#d97706", background: "#fffbeb", border: "1px solid #fde68a" },
+    validation: { color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a" },
   };
-  const labels = { project: "已关联项目", material: "已关联材料", issue: "已关联问题" };
+  const labels = { project: "已关联项目", material: "已关联材料", issue: "已关联问题", validation: "已关联校验结果" };
   const name =
     context.type === "project"  ? context.projectName :
     context.type === "material" ? context.materialName :
+    context.type === "validation" ? `${context.issues.length} 个校验问题` :
     context.issueName;
 
   return (
@@ -72,6 +77,8 @@ function ProactiveMessage({ context, demo, pendingCount }: { context: AssistantC
     msg = "当前投资总额为500万美元，其中自有资金350万（70%）、银行贷款150万（30%），资金合计关系正确。";
   } else if (context.type === "issue") {
     msg = `我已定位到「${context.issueName}」相关问题。这是当前影响${context.department}校验的核心字段，需要在两份材料中保持一致后重新上传。`;
+  } else if (context.type === "validation") {
+    msg = `本次校验共 ${context.issues.length} 个问题，我已将清单带入输入框——点击发送即可逐项分析整改建议。`;
   } else if (context.type === "material") {
     msg = `我已识别「${context.materialName}」的关键字段。该材料涉及核心申报信息，以下是识别结果和校验状态。`;
   } else if ((pendingCount ?? 0) > 0) {

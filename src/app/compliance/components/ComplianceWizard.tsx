@@ -164,15 +164,16 @@ export function ComplianceWizard({ state, setState, onGenerated, onAskCopilot, o
         </div>
       )}
 
-      {/* 底部导航 */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
-        <button onClick={() => cur > 0 && goStep(cur - 1)} disabled={cur === 0}
-          style={{ ...btnGhostStyle, opacity: cur === 0 ? 0.4 : 1, cursor: cur === 0 ? "default" : "pointer" }}>上一步</button>
-        <button onClick={handleNext}
-          style={{ background: C.primary, color: "#fff", border: "none", borderRadius: 8, padding: "10px 32px", fontSize: 14, fontWeight: 600, cursor: "pointer", letterSpacing: 1 }}>
-          {isLast ? "生成自查报告" : cur === 0 ? "开始自查" : "下一步"}
-        </button>
-      </div>
+      {/* 底部导航(使用说明步骤隐藏:说明卡内已有「开始自查」按钮,避免两个开始按钮) */}
+      {cur > 0 && (
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+          <button onClick={() => goStep(cur - 1)} style={btnGhostStyle}>上一步</button>
+          <button onClick={handleNext}
+            style={{ background: C.primary, color: "#fff", border: "none", borderRadius: 8, padding: "10px 32px", fontSize: 14, fontWeight: 600, cursor: "pointer", letterSpacing: 1 }}>
+            {isLast ? "生成自查报告" : "下一步"}
+          </button>
+        </div>
+      )}
 
       {/* 国别提示模态 */}
       {pendingCountry && (

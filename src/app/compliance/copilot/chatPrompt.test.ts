@@ -48,4 +48,42 @@ describe("chatPrompt.parseChatResponse", () => {
     expect(clauses[0].id).toBe("商务部令2014年第3号 第九条、第十条");
     expect(typeof clauses[0].point).toBe("string");
   });
+
+  // 识别准度:模型回 label/主干也能映射到 code(去写死 value=code 的单一假设)
+  it("maps label-valued select candidates to codes", () => {
+    const fields = getFieldsForStep(1, null);
+    const raw = JSON.stringify({
+      answer: null,
+      candidates: [
+        { key: "investMode", value: "新设类", confidence: 0.92, evidence: "我们准备新设" },
+        { key: "ownership", value: "民营", confidence: 0.9, evidence: "民营企业" },
+      ],
+      clauses: [],
+    });
+    const { candidates } = parseChatResponse(raw, fields);
+    expect(candidates.map(c => c.field.key).sort()).toEqual(["investMode", "ownership"]);
+    expect(candidates.find(c => c.field.key === "investMode")!.value).toBe("new");
+  });
+
+  it("multi accepts label tokens mixed with codes and dedupes", () => {
+    const fields = getFieldsForStep(5, null);
+    const raw = JSON.stringify({
+      answer: null,
+      candidates: [{ key: "s1b", value: "半导体/集成电路制造,稀土提炼/永磁体,sc", confidence: 0.9, evidence: "半导体和稀土" }],
+      clauses: [],
+    });
+    const { candidates } = parseChatResponse(raw, fields);
+    expect(candidates.length).toBe(1);
+    expect(candidates[0].value).toBe("sc,re"); // label 映射 + 与 code 去重
+  });
+
+  it("drops select candidates with ambiguous label (matches two options)", () => {
+    const fields = getFieldsForStep(3, "new");
+    const raw = JSON.stringify({
+      answer: null,
+      candidates: [{ key: "g2", value: "涉及关联方", confidence: 0.9, evidence: "有关联交易" }],
+      clauses: [],
+    });
+    expect(parseChatResponse(raw, fields).candidates).toEqual([]);
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getFieldsForStep, buildExtractSystemPrompt, parseExtractResponse } from "./fieldCatalog";
+import { getFieldsForStep, buildExtractSystemPrompt, parseExtractResponse, matchOptionValue } from "./fieldCatalog";
 import type { WizardApi } from "../components/fields";
 
 function fakeApi(): { api: WizardApi; calls: Record<string, unknown[][]> } {
@@ -54,5 +54,38 @@ describe("fieldCatalog", () => {
   });
   it("parseExtractResponse returns [] on bad JSON", () => {
     expect(parseExtractResponse("not json", getFieldsForStep(1, null))).toEqual([]);
+  });
+
+  // 识别准度:模型回 label/主干/前缀也能映射到 code,歧义丢弃(宁缺勿错填)
+  it("matchOptionValue maps code/label/head/prefix, drops ambiguous or too-short", () => {
+    const investMode = getFieldsForStep(1, null).find(f => f.key === "investMode")!.allowed!;
+    expect(matchOptionValue("new", investMode)).toBe("new");
+    expect(matchOptionValue("新设类", investMode)).toBe("new"); // 括号前主干
+    expect(matchOptionValue("新设类（在境外设立新企业/绿地投资）", investMode)).toBe("new"); // 完整 label
+    expect(matchOptionValue("乱填", investMode)).toBeNull();
+
+    const z1 = getFieldsForStep(2, null).find(f => f.key === "z1")!.allowed!;
+    expect(matchOptionValue("架构清晰", z1)).toBe("a"); // 长主干前缀
+    expect(matchOptionValue("架构", z1)).toBeNull(); // 2字前缀太短,不猜
+
+    const g2 = getFieldsForStep(3, "new").find(f => f.key === "g2")!.allowed!;
+    expect(matchOptionValue("涉及关联方", g2)).toBeNull(); // 主干命中 a2/b 两个选项,歧义丢弃
+
+    const lsB = getFieldsForStep(4, null).find(f => f.key === "lsB")!.allowed!;
+    expect(matchOptionValue("房地产业", lsB)).toBe("2"); // 主干+附加文字
+    expect(matchOptionValue("房地产", lsB)).toBe("2"); // 主干完全一致
+  });
+
+  it("parseExtractResponse maps label value to code", () => {
+    const fields = getFieldsForStep(1, null);
+    const raw = JSON.stringify({
+      investMode: { value: "新设类", confidence: 0.9, evidence: "设个生产基地" },
+      ownership: { value: "民营", confidence: 0.9, evidence: "民营企业" },
+      amount: { value: " 5000 万美元 ", confidence: 0.8, evidence: "五千万美金" },
+    });
+    const out = parseExtractResponse(raw, fields);
+    expect(out.find(o => o.field.key === "investMode")?.value).toBe("new");
+    expect(out.find(o => o.field.key === "ownership")?.value).toBe("民营");
+    expect(out.find(o => o.field.key === "amount")?.value).toBe("5000 万美元"); // text 清洗压缩空白
   });
 });

@@ -21,6 +21,65 @@ export interface ParsedCandidate {
   lowConf: boolean;
 }
 
+// ─── 识别准度提升(2026-08-21):模型回包 value 规整 ─────────────────────────────
+// 模型常把「label 文字」当 value 回(而非 code),或只回主干("新设类"缺括号部分)、
+// 长 label 前缀("架构清晰")——旧逻辑直接拒收导致漏识别。逐级匹配,且任何一级
+// 命中多个选项时判为歧义并丢弃(宁缺勿错填):
+//   ① 精确 code ② 完整 label(归一化后一致) ③ 括号前主干 ④ 主干前缀(≥3字)
+//   ⑤ 主干+附加文字(如"全资(100%)"、"房地产业"→房地产)
+export function normalizeOptionText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[\s　]+/g, "")
+    .replace(/[（）()\[\]【】《》<>:：;；,，。.、"'「」『』]/g, "");
+}
+
+export function matchOptionValue(raw: string, allowed: { value: string; label: string }[]): string | null {
+  const r = raw.trim();
+  if (!r) return null;
+  const exact = allowed.filter(a => a.value === r);
+  if (exact.length === 1) return exact[0]!.value;
+  const rn = normalizeOptionText(r);
+  if (!rn) return null;
+  const hits = new Set<string>();
+  for (const a of allowed) {
+    const ln = normalizeOptionText(a.label);
+    if (!ln) continue;
+    if (ln === rn) { hits.add(a.value); continue; }                      // ② 完整 label
+    const head = a.label.split(/[（(]/)[0];
+    const hn = normalizeOptionText(head);
+    if (!hn) continue;
+    if (hn === rn) { hits.add(a.value); continue; }                      // ③ 括号前主干(如"新设类")
+    if (hn.startsWith(rn) && rn.length >= 3) { hits.add(a.value); continue; } // ④ 主干前缀(如"架构清晰"/"B2C")
+    if (rn.startsWith(hn) && hn.length >= 2 && rn.length - hn.length >= 1) { hits.add(a.value); continue; } // ⑤ 主干+附加文字(如"房地产业")
+  }
+  return hits.size === 1 ? [...hits][0]! : null;
+}
+
+// text 字段规整:去首尾引号/空白,压缩连续空白
+export function cleanTextValue(raw: string): string {
+  return raw
+    .replace(/^[\s"'「『]+|[\s"'」』]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function clampConfidence(v: unknown, fallback = 0.5): number {
+  const n = typeof v === "number" && isFinite(v) ? v : fallback;
+  return Math.min(1, Math.max(0, n));
+}
+
+// multi token 列表 → code 列表(逐 token 匹配、去重、保序、非法丢弃)
+export function mapMultiTokens(raw: string, allowed?: { value: string; label: string }[]): string[] {
+  const tokens = String(raw).split(/[，,、\s]+/).map(s => s.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const t of tokens) {
+    const code = allowed ? matchOptionValue(t, allowed) : t;
+    if (code && !out.includes(code)) out.push(code);
+  }
+  return out;
+}
+
 const IND_OPTS = [
   { value: "C", label: "制造业" }, { value: "I", label: "信息传输、软件和信息技术服务业" },
   { value: "G", label: "交通运输、仓储和邮政业" }, { value: "L", label: "租赁和商务服务业" },
@@ -297,7 +356,7 @@ export function buildExtractSystemPrompt(step: number, mode: Mode | null): strin
   return "字段清单（value 必须是允许值之一；不确定的字段整字段省略）：\n" + lines.join("\n");
 }
 
-// 把候选 value 规整：multi 拆分校验、select 校验、丢弃非法。
+// 把候选 value 规整：multi 拆分校验、select 匹配 code（code/label/主干三级）、text 清洗、丢弃非法。
 export function parseExtractResponse(content: string, fields: ExtractField[]): ParsedCandidate[] {
   let obj: Record<string, { value: unknown; confidence: number; evidence: string }>;
   try { obj = JSON.parse(content); } catch { return []; }
@@ -305,17 +364,20 @@ export function parseExtractResponse(content: string, fields: ExtractField[]): P
   for (const f of fields) {
     const v = obj[f.key];
     if (!v || v.value == null || v.value === "") continue;
-    const conf = typeof v.confidence === "number" ? v.confidence : 0.5;
+    const conf = clampConfidence(v.confidence);
     const evidence = String(v.evidence ?? "");
     if (f.kind === "multi") {
-      const codes = String(v.value).split(/[，,、\s]+/).map(s => s.trim()).filter(Boolean);
-      const valid = f.allowed ? codes.filter(c => f.allowed!.some(a => a.value === c)) : codes;
-      if (valid.length === 0) continue;
-      out.push({ field: f, value: valid.join(","), confidence: conf, evidence, lowConf: conf < 0.8 });
+      const codes = mapMultiTokens(String(v.value), f.allowed);
+      if (codes.length === 0) continue;
+      out.push({ field: f, value: codes.join(","), confidence: conf, evidence, lowConf: conf < 0.8 });
+    } else if (f.kind === "select") {
+      const code = f.allowed ? matchOptionValue(String(v.value), f.allowed) : cleanTextValue(String(v.value));
+      if (!code) continue;
+      out.push({ field: f, value: code, confidence: conf, evidence, lowConf: conf < 0.8 });
     } else {
-      const value = String(v.value);
-      if (f.kind === "select" && f.allowed && !f.allowed.some(a => a.value === value)) continue;
-      out.push({ field: f, value, confidence: conf, evidence, lowConf: conf < 0.8 });
+      const text = cleanTextValue(String(v.value));
+      if (!text) continue;
+      out.push({ field: f, value: text, confidence: conf, evidence, lowConf: conf < 0.8 });
     }
   }
   return out;

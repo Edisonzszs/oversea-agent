@@ -21,11 +21,9 @@ import { OdiProjectSidebar, type OdiSidebarView } from "./components/OdiProjectS
 import { ContextWorkspace } from "./components/ContextWorkspace";
 import { OdiProjectListPage } from "./components/OdiProjectListPage";
 import { OdiProjectDetailPage } from "./components/OdiProjectDetailPage";
-import { OdiDemoDetailPage } from "./components/OdiDemoDetailPage";
 import { type AssistantContext } from "./components/OdiProjectAssistantPanel";
 import { OdiCopilotPanel } from "./components/OdiCopilotPanel";
-import { NewOdiProjectModal, type NewTaskResult } from "./components/NewOdiProjectModal";
-import { MOCK_ODI_PROJECTS, type OdiProject, type AssistProject, type DemoProject, type DemoScene, type DemoMode } from "./components/odiProjectData";
+import { type OdiProject, type AssistProject } from "./components/odiProjectData";
 import { MOCK_COMPLIANCE_PROJECTS, type ComplianceProject } from "./compliance/data/complianceProjects";
 import { ComplianceSidebar, type ComplianceView } from "./compliance/components/ComplianceSidebar";
 import { ComplianceListPage } from "./compliance/components/ComplianceListPage";
@@ -37,6 +35,30 @@ import { PortalHomePage } from "./components/PortalHomePage";
 import { VersionSelectModal } from "./components/VersionSelectModal";
 import { QuickTestWizard } from "./quicktest/QuickTestWizard";
 import type { Answers } from "./quicktest/questions";
+
+// ── 「问沪航者」seed 构建(由点击位置携带的字段/校验结论实时生成,不再写死) ──
+function issueSeed(c: Extract<AssistantContext, { type: "issue" }>): string {
+  const clean = (s: string) => s.replace(/[。；;]+$/, "");
+  const parts = [`校验发现的问题【${c.field || c.issueName}】（${c.department}）`];
+  if (c.conclusion) parts.push(`校验结论:${clean(c.conclusion)}`);
+  if (c.evidence) parts.push(`当前值:${clean(c.evidence)}`);
+  if (c.suggestion) parts.push(`系统提示:${clean(c.suggestion)}`);
+  return `${parts.join(";")}。请帮我分析原因,给出具体的整改建议和正确的填报口径。`;
+}
+
+function validationSeed(c: Extract<AssistantContext, { type: "validation" }>): string {
+  const shown = c.issues.slice(0, 6);
+  const list = shown
+    .map((it, i) => {
+      const bits = [`${i + 1}.【${it.field}】（${it.department}·${it.conclusion}）`];
+      if (it.evidence) bits.push(`当前值:${it.evidence}`);
+      if (it.suggestion) bits.push(`建议:${it.suggestion}`);
+      return bits.join(",");
+    })
+    .join("\n");
+  const rest = c.issues.length > shown.length ? `\n（其余 ${c.issues.length - shown.length} 项未列出）` : "";
+  return `项目「${c.projectName}」本次校验共 ${c.issues.length} 个问题:\n${list}${rest}\n请逐项给出整改建议和正确的填报口径。`;
+}
 
 export type AppFrame =
   | "welcome"
@@ -51,7 +73,7 @@ export type AppFrame =
   | "odi-project"
   | "odi-prereview";
 
-type AppMode = "portal" | "xiaohai" | "odi-list" | "odi-project" | "odi-demo" | "compliance" | "login";
+type AppMode = "portal" | "xiaohai" | "odi-list" | "odi-project" | "compliance" | "login";
 
 export type FileStatus = "上传中" | "已上传" | "识别中" | "已识别";
 export type AttachedFile = { name: string; status: FileStatus; id: number };
@@ -108,8 +130,8 @@ export default function App() {
 
   // Project state
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [projects, setProjects] = useState<OdiProject[]>(MOCK_ODI_PROJECTS);
-  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  // 初始无任何项目（用户要求：删除演示/预置记录，从空开始；新建任务即进申报助办）
+  const [projects, setProjects] = useState<OdiProject[]>([]);
   // ODI 项目重命名/删除(复用合规的 RenameModal/DeleteConfirmModal)。
   const [odiRenameId, setOdiRenameId] = useState<string | null>(null);
   const [odiDeleteId, setOdiDeleteId] = useState<string | null>(null);
@@ -126,7 +148,7 @@ export default function App() {
   // 速测版:嵌入合规空间中央区(非独立全屏),与列表/详情页平级
   const [quickTestActive, setQuickTestActive] = useState(false);
 
-  // ODI 新版平台 state —— 已撤 detour:ODI 统一走 Figma 设计线(odi-list/odi-project/odi-demo,见 handleEnterOdiWorkbench)。
+  // ODI 新版平台 state —— 已撤 detour:ODI 统一走 Figma 设计线(odi-list/odi-project,见 handleEnterOdiWorkbench)。
   // odi/ 目录下的字段池/向导/生成等"进入后"逻辑保留备用,不再作为入口挂载。
 
   // Assistant panel state
@@ -212,12 +234,8 @@ export default function App() {
     if (!proj) return;
     setActiveProjectId(id);
     setAssistantCollapsed(false); // Step 2:进入项目即展开 ODI 伴填面板
-    if (proj.serviceType === "demo") {
-      setMode("odi-demo");
-    } else {
-      setMode("odi-project");
-      setAssistantCtx({ type: "project", projectId: proj.id, projectName: proj.name });
-    }
+    setMode("odi-project");
+    setAssistantCtx({ type: "project", projectId: proj.id, projectName: proj.name });
   };
 
   const handleSelectView = (v: OdiSidebarView) => {
@@ -338,60 +356,29 @@ export default function App() {
     setComplianceProjects(prev => [copy, ...prev]);
   };
 
+  // 新建任务 → 直接创建申报助办项目并进入（免弹窗选择；填报演示已删除）
   const handleNewProject = () => {
-    setShowNewProjectModal(true);
-  };
-
-  const handleCreateProject = (result: NewTaskResult) => {
-    if (result.kind === "assist") {
-      const p: AssistProject = {
-        serviceType: "assist",
-        id: `p${Date.now()}`,
-        name: "新项目", // 免起名:进详情后按材料识别字段/上传文件自动命名(类对话标题)
-        status: "待上传材料",
-        investmentType: "新设",
-        uploadedCount: 0,
-        mismatchCount: 0,
-        missingCount: 0,
-        passedCount: 0,
-        generatedCount: 0,
-        updatedAt: "刚刚",
-        materials: [],
-        materialVersion: 0,
-      };
-      setProjects(prev => [p, ...prev]);
-      setShowNewProjectModal(false);
-      // 直接用本地的 p 设状态(不走 handleSelectProject 的 find —— 那里 projects 闭包过期,新建会找不到)。
-      setActiveProjectId(p.id);
-      setAssistantCollapsed(false);
-      setAssistantCtx({ type: "project", projectId: p.id, projectName: p.name });
-      setMode("odi-project");
-    } else {
-      const scene = result.scene as DemoScene;
-      const mode = result.mode as DemoMode;
-      const p: DemoProject = {
-        serviceType: "demo",
-        id: `d${Date.now()}`,
-        name: `${scene}场景模拟体验`,
-        status: "进行中",
-        scene,
-        mode,
-        country: "待填写",
-        industry: "待填写",
-        investmentAmount: "待填写",
-        equityRatio: "100%",
-        currentStep: 0,
-        stepStatuses: ["active", "pending", "pending", "pending"],
-        warningCount: 0,
-        generatedCount: 0,
-        updatedAt: "刚刚",
-      };
-      setProjects(prev => [p, ...prev]);
-      setShowNewProjectModal(false);
-      setActiveProjectId(p.id);
-      setAssistantCollapsed(false);
-      setMode("odi-demo");
-    }
+    const p: AssistProject = {
+      serviceType: "assist",
+      id: `p${Date.now()}`,
+      name: "新项目", // 免起名:进详情后按材料识别字段/上传文件自动命名(类对话标题)
+      status: "待上传材料",
+      investmentType: "新设",
+      uploadedCount: 0,
+      mismatchCount: 0,
+      missingCount: 0,
+      passedCount: 0,
+      generatedCount: 0,
+      updatedAt: "刚刚",
+      materials: [],
+      materialVersion: 0,
+    };
+    setProjects(prev => [p, ...prev]);
+    // 直接用本地的 p 设状态(不走 handleSelectProject 的 find —— 那里 projects 闭包过期,新建会找不到)。
+    setActiveProjectId(p.id);
+    setAssistantCollapsed(false);
+    setAssistantCtx({ type: "project", projectId: p.id, projectName: p.name });
+    setMode("odi-project");
   };
 
   // ODI 项目重命名/删除(侧栏与列表卡片菜单共用)。
@@ -416,42 +403,6 @@ export default function App() {
     }));
   };
 
-  // 模拟填报项目回写(完成填报/步进进度),同助办口径
-  const handleUpdateDemoProject = (
-    id: string,
-    patch: Partial<DemoProject> | ((p: DemoProject) => Partial<DemoProject>),
-  ) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id !== id || p.serviceType !== "demo") return p;
-      const resolved = typeof patch === "function" ? patch(p) : patch;
-      return { ...p, ...resolved, updatedAt: "刚刚" };
-    }));
-  };
-
-  // 从模拟体验发起正式申报助办:新建「新项目」并挂 fromDemoId(模拟数据不带入,需重新上传材料)
-  const handleLaunchAssistFromDemo = (demoId: string) => {
-    const p: AssistProject = {
-      serviceType: "assist",
-      id: `p${Date.now()}`,
-      name: "新项目",
-      status: "待上传材料",
-      investmentType: "新设",
-      uploadedCount: 0,
-      mismatchCount: 0,
-      missingCount: 0,
-      passedCount: 0,
-      generatedCount: 0,
-      updatedAt: "刚刚",
-      fromDemoId: demoId,
-      materials: [],
-      materialVersion: 0,
-    };
-    setProjects(prev => [p, ...prev]);
-    setActiveProjectId(p.id);
-    setAssistantCollapsed(false);
-    setAssistantCtx({ type: "project", projectId: p.id, projectName: p.name });
-    setMode("odi-project");
-  };
 
   const handleAskAssistant = (ctx: AssistantContext) => {
     setAssistantCtx(ctx);
@@ -459,11 +410,14 @@ export default function App() {
   };
 
   // 「问沪航者」语境 → 预填问题(面板展开 + 输入框带入语境,用户确认后再发送)
+  // 问题内容由点击位置携带的字段/校验结论实时生成,不再写死
   const assistantSeed = assistantCtx
     ? assistantCtx.type === "material"
       ? `关于材料「${assistantCtx.materialName}」：这份材料在 ODI 备案中的作用、识别要点和常见问题有哪些？`
       : assistantCtx.type === "issue"
-      ? `校验发现的问题「${assistantCtx.issueName}」（${assistantCtx.department}）应如何处理？请给出具体整改建议。`
+      ? issueSeed(assistantCtx)
+      : assistantCtx.type === "validation"
+      ? validationSeed(assistantCtx)
       : `关于 ODI 助办项目「${assistantCtx.projectName}」：帮我梳理当前进度、待处理问题和下一步建议。`
     : null;
 
@@ -582,9 +536,10 @@ export default function App() {
             user={authUser}
             onLogin={enterLogin}
             serverConversations={serverConvs}
+            onServerConvMutated={() => { void refreshServerConvs(); }}
           />
         )}
-        {(mode === "odi-list" || mode === "odi-project" || mode === "odi-demo") && (
+        {(mode === "odi-list" || mode === "odi-project") && (
           <OdiProjectSidebar
             collapsed={leftCollapsed}
             onToggleCollapse={() => setLeftCollapsed(v => !v)}
@@ -705,15 +660,7 @@ export default function App() {
             />
           )}
 
-          {/* ODI demo mode */}
-          {mode === "odi-demo" && activeProject && activeProject.serviceType === "demo" && (
-            <OdiDemoDetailPage
-              project={activeProject as DemoProject}
-              onBack={() => { setMode("odi-list"); setActiveProjectId(null); }}
-              onUpdate={patch => handleUpdateDemoProject(activeProject.id, patch)}
-              onLaunchAssist={() => handleLaunchAssistFromDemo(activeProject.id)}
-            />
-          )}
+          {/* (填报演示 mode 已删除:ODI 只剩申报助办,见 handleNewProject) */}
 
           {/* Compliance mode —— 合规自查（独立 shell，先独立）*/}
           {/* 速测版:嵌入合规空间中央区(左侧合规侧栏保留,同完整版外壳) */}
@@ -756,24 +703,7 @@ export default function App() {
             onSeedConsumed={() => setAssistantCtx(null)}
           />
         )}
-        {mode === "odi-demo" && activeProject?.serviceType === "demo" && (
-          <OdiCopilotPanel
-            collapsed={assistantCollapsed}
-            onToggleCollapse={() => setAssistantCollapsed(v => !v)}
-            context={{ projectId: activeProject.id, projectName: activeProject.name }}
-            seed={assistantSeed}
-            onSeedConsumed={() => setAssistantCtx(null)}
-          />
-        )}
       </div>
-
-      {/* New project modal */}
-      {showNewProjectModal && (
-        <NewOdiProjectModal
-          onConfirm={handleCreateProject}
-          onCancel={() => setShowNewProjectModal(false)}
-        />
-      )}
 
       {/* ODI 项目重命名/删除弹窗(复用合规组件) */}
       {odiRenameTarget && (
@@ -792,7 +722,7 @@ export default function App() {
       )}
 
       {/* (合规新建免起名:选版本后直接建「新项目」,进向导后按选项/输入自动命名;原名称弹窗已撤) */}
-      {/* (ODI detour 新建弹窗已撤:新建走 Figma 设计线 OdiProjectListPage 的 onNewProject → NewOdiProjectModal) */}
+      {/* (ODI 新建弹窗已撤:onNewProject 直接建申报助办项目并进入,填报演示入口全删) */}
     </div>
   );
 }

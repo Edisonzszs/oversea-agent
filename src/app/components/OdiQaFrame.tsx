@@ -625,10 +625,7 @@ export function OdiQaFrame({ mode, serviceType = "助办", onOdiClick, onDemoCli
           </>
         )}
 
-        {/* Demo mode chat (outside showOdiAssistant block) */}
-        {isOdi && showOdiDemo && (
-          <DemoFormBubble onFieldChange={onDemoFieldChange} />
-        )}
+        {/* (Demo mode chat 已删除:填报演示整体下线) */}
       </div>
 
       <ChatInputBar value={inputVal} onChange={setInputVal} onSend={() => { setInputVal(""); }} />
@@ -732,26 +729,15 @@ function OdiReplyContent({ onOdiClick, onDemoClick, serviceType = "助办", init
 
           {hasIntent && (
             <div style={{ padding: "16px 18px", borderRadius: 10, background: "#f8faff", border: "1px solid #dbeafe", animation: "fadeSlideIn 0.3s ease" }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "#1a2744", marginBottom: 12 }}>您可以选择以下方式继续：</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <button
-                    onClick={onDemoClick}
-                    style={{ padding: "5px 14px", borderRadius: 7, background: "#fff", color: "#1a5bc6", fontSize: 12, fontWeight: 600, cursor: "pointer", border: "1px solid #bfdbfe", flexShrink: 0, whiteSpace: "nowrap" }}
-                  >
-                    填报演示
-                  </button>
-                  <span style={{ fontSize: 13, color: "#3a4f72", lineHeight: 1.7, paddingTop: 3 }}>用于熟悉 ODI 办理流程和材料填写方式，无需上传正式材料。</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <button
-                    onClick={handleClick}
-                    style={{ padding: "5px 14px", borderRadius: 7, background: "linear-gradient(135deg,#2563eb,#1a4ca8)", color: "#fff", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap", boxShadow: "0 2px 6px rgba(37,99,235,0.22)" }}
-                  >
-                    申报助办
-                  </button>
-                  <span style={{ fontSize: 13, color: "#3a4f72", lineHeight: 1.7, paddingTop: 3 }}>用于已准备或正在准备正式材料的场景，系统将协助上传识别、缺项提示和材料生成。</span>
-                </div>
+              {/* 填报演示按钮已删除(2026-08-21 需求):有明确意向直接进申报助办 */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <button
+                  onClick={handleClick}
+                  style={{ padding: "5px 14px", borderRadius: 7, background: "linear-gradient(135deg,#2563eb,#1a4ca8)", color: "#fff", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap", boxShadow: "0 2px 6px rgba(37,99,235,0.22)" }}
+                >
+                  申报助办
+                </button>
+                <span style={{ fontSize: 13, color: "#3a4f72", lineHeight: 1.7, paddingTop: 3 }}>用于已准备或正在准备正式材料的场景，系统将协助上传识别、缺项提示和材料生成。</span>
               </div>
             </div>
           )}

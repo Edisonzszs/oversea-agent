@@ -7,6 +7,7 @@ import xiaohaiLogo from "../../imports/a79a33e60349890f7bf1eb25f7af24df.png";
 import { DUR, EASE, CSS_EASE, DIST, REDUCED_MOTION_QUERY } from "../motionTokens";
 import { SearchCommandModal, type CmdItem, PlusGlyph, ChatGlyph, StarGlyph } from "./SearchCommandModal";
 import { UserMenu } from "./UserMenu";
+import { renameServerConversation, deleteServerConversation } from "../services/conversations";
 
 gsap.registerPlugin(Flip);
 
@@ -23,12 +24,26 @@ interface Props {
   onLogin?: () => void;
   /** M1（2d）服务端会话（本机真实问答产生，事件日志落库） */
   serverConversations?: ConversationItem[];
+  /** 服务端会话被重命名/删除后通知 App 刷新「我的对话」 */
+  onServerConvMutated?: () => void;
 }
 
 function MoreMenu({ favorite, onRename, onFavorite, onDelete }: { favorite: boolean; onRename: () => void; onFavorite: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // 弹窗常驻：仅当点击「收藏/重命名/删除」或点击弹窗以外区域时关闭（参考 ChatGPT/豆包）
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
   return (
-    <div style={{ position: "relative" }}>
+    <div ref={rootRef} style={{ position: "relative" }}>
       <button
         onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
         style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, color: "#94a3b8", fontSize: 14, lineHeight: 1 }}
@@ -38,7 +53,6 @@ function MoreMenu({ favorite, onRename, onFavorite, onDelete }: { favorite: bool
       {open && (
         <div
           style={{ position: "absolute", right: 0, top: "100%", zIndex: 100, background: "#fff", border: "1px solid #e5eaf2", borderRadius: 8, boxShadow: "0 4px 16px rgba(26,64,140,0.12)", minWidth: 128, overflow: "hidden" }}
-          onMouseLeave={() => setOpen(false)}
         >
           {[
             { label: "重命名", fn: onRename },
@@ -78,8 +92,10 @@ function StarIcon({ filled, animRef }: { filled: boolean; animRef?: React.RefObj
   );
 }
 
-function ConvItem({ conv, active, onSelect, onToggleFavorite }: { conv: ConversationItem; active: boolean; onSelect: () => void; onToggleFavorite: () => void }) {
+function ConvItem({ conv, active, onSelect, onToggleFavorite, onRename, onDelete }: { conv: ConversationItem; active: boolean; onSelect: () => void; onToggleFavorite: () => void; onRename: (title: string) => void; onDelete: () => void }) {
   const [hovered, setHovered] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
   const starRef = useRef<SVGSVGElement>(null);
 
   const handleFavorite = useCallback((e: React.MouseEvent) => {
@@ -98,6 +114,13 @@ function ConvItem({ conv, active, onSelect, onToggleFavorite }: { conv: Conversa
     onToggleFavorite();
   }, [onToggleFavorite]);
 
+  const startEdit = () => { setDraft(conv.title); setEditing(true); };
+  const commitEdit = () => {
+    const t = draft.trim();
+    if (t && t !== conv.title) onRename(t);
+    setEditing(false);
+  };
+
   return (
     <div
       onClick={onSelect}
@@ -105,16 +128,29 @@ function ConvItem({ conv, active, onSelect, onToggleFavorite }: { conv: Conversa
       onMouseLeave={() => setHovered(false)}
       style={{ margin: "1px 8px", padding: "8px 10px", borderRadius: 8, cursor: "pointer", background: active ? "#eff6ff" : hovered ? "#f5f7fa" : "transparent", transition: "background 0.15s", display: "flex", alignItems: "center", gap: 8 }}
     >
-      <span style={{ fontSize: 13, color: active ? "#1a5bc6" : "#374151", fontWeight: active ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, lineHeight: 1.5 }}>
-        {conv.title}
-      </span>
-      {conv.isOdiRelated && !hovered && (
+      {editing ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onClick={e => e.stopPropagation()}
+          onKeyDown={e => { if (e.key === "Enter") commitEdit(); else if (e.key === "Escape") setEditing(false); }}
+          onBlur={commitEdit}
+          maxLength={50}
+          style={{ flex: 1, minWidth: 0, fontSize: 13, color: "#1f2937", border: "1.5px solid #1a5bc6", borderRadius: 4, padding: "2px 6px", outline: "none", background: "#fff", lineHeight: 1.4 }}
+        />
+      ) : (
+        <span style={{ fontSize: 13, color: active ? "#1a5bc6" : "#374151", fontWeight: active ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, lineHeight: 1.5 }}>
+          {conv.title}
+        </span>
+      )}
+      {conv.isOdiRelated && !hovered && !editing && (
         <span style={{ fontSize: 9, fontWeight: 700, color: "#1a5bc6", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 5, padding: "1px 5px", flexShrink: 0 }}>ODI</span>
       )}
-      {conv.favorite && !hovered && (
+      {conv.favorite && !hovered && !editing && (
         <span style={{ flexShrink: 0, display: "flex" }}><StarIcon filled /></span>
       )}
-      {hovered && (
+      {hovered && !editing && (
         <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
           <button
             onClick={handleFavorite}
@@ -131,7 +167,7 @@ function ConvItem({ conv, active, onSelect, onToggleFavorite }: { conv: Conversa
                 stroke={conv.favorite ? "#f59e0b" : "#cbd5e1"} strokeWidth="1.3" strokeLinejoin="round" />
             </svg>
           </button>
-          <MoreMenu favorite={conv.favorite} onRename={() => {}} onFavorite={() => { handleFavorite({ stopPropagation: () => {} } as React.MouseEvent); }} onDelete={() => {}} />
+          <MoreMenu favorite={conv.favorite} onRename={startEdit} onFavorite={() => handleFavorite({ stopPropagation: () => {} } as React.MouseEvent)} onDelete={onDelete} />
         </div>
       )}
     </div>
@@ -226,7 +262,7 @@ function BrandMark() {
  * 3. 按钮微交互：hover scale 1.05，CSS transition 120-160ms
  *    触发：mouseenter/mouseleave | 时长：130ms | ease: CSS ease | 降级：无变化
  */
-export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId, onSelectConversation, onNewConversation, onEnterOdiWorkbench, pendingOdiCount, onEnterCompliance, user, onLogin, serverConversations }: Props) {
+export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId, onSelectConversation, onNewConversation, onEnterOdiWorkbench, pendingOdiCount, onEnterCompliance, user, onLogin, serverConversations, onServerConvMutated }: Props) {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [toolboxOpen, setToolboxOpen] = useState(true);
   const [favOpen, setFavOpen] = useState(true);
@@ -238,19 +274,64 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
     Object.fromEntries(CONVERSATIONS.map(c => [c.id, c.favorite]))
   );
 
+  // 演示会话的本地覆盖层（删除/重命名，localStorage 持久）——「删除」不再是假按钮
+  const [overrides, setOverrides] = useState<{ deleted: string[]; titles: Record<string, string> }>(() => {
+    try {
+      const raw = localStorage.getItem("chuhai_conv_overrides");
+      if (raw) {
+        const o = JSON.parse(raw) as { deleted?: string[]; titles?: Record<string, string> };
+        return { deleted: o.deleted ?? [], titles: o.titles ?? {} };
+      }
+    } catch { /* 忽略损坏的存储 */ }
+    return { deleted: [], titles: {} };
+  });
+  const persistOverrides = (o: { deleted: string[]; titles: Record<string, string> }) => {
+    setOverrides(o);
+    try { localStorage.setItem("chuhai_conv_overrides", JSON.stringify(o)); } catch { /* 存储不可用仅内存态 */ }
+  };
+
   const sidebarRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const toggleFavorite = (id: string) => setFavs(prev => ({ ...prev, [id]: !prev[id] }));
 
   const list = useMemo(
-    () => CONVERSATIONS.map(c => ({ ...c, favorite: favs[c.id] })),
-    [favs]
+    () => CONVERSATIONS
+      .filter(c => !overrides.deleted.includes(c.id))
+      .map(c => ({ ...c, favorite: favs[c.id], title: overrides.titles[c.id] ?? c.title })),
+    [favs, overrides]
   );
 
   const filtered = list;
   const favorites = filtered.filter(c => c.favorite);
   const recent = filtered.filter(c => !c.favorite);
+
+  /** 演示会话删除：本地覆盖层 + 若删的是当前选中会话则开新对话 */
+  const handleMockDelete = (id: string) => {
+    persistOverrides({ ...overrides, deleted: [...overrides.deleted, id] });
+    if (id === activeConvId) onNewConversation();
+  };
+
+  /** 服务端会话删除：真实接口（级联清消息/运行记录），成功后刷新列表 */
+  const handleServerDelete = async (id: string) => {
+    try {
+      await deleteServerConversation(id);
+      onServerConvMutated?.();
+      if (id === activeConvId) onNewConversation();
+    } catch (e: any) {
+      alert(e?.message || "删除失败，请稍后再试");
+    }
+  };
+
+  /** 服务端会话重命名：真实接口，成功后刷新列表（本地演示会话走覆盖层） */
+  const handleServerRename = async (id: string, title: string) => {
+    try {
+      await renameServerConversation(id, title);
+      onServerConvMutated?.();
+    } catch (e: any) {
+      alert(e?.message || "重命名失败，请稍后再试");
+    }
+  };
 
   // Sidebar collapse/expand animation
   useGSAP(() => {
@@ -422,28 +503,31 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, activeConvId,
           )}
         </div>
 
-        {/* 会话列表 */}
+        {/* 会话列表：收藏对话置顶（用户要求顺序），其后为服务端「我的对话」，再后为演示「最近对话」 */}
         <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", paddingTop: 2, paddingBottom: 6 }}>
-          {(serverConversations?.length ?? 0) > 0 && (
-            <>
-              {sectionLabel("我的对话", mineOpen, () => setMineOpen(v => !v), serverConversations!.length)}
-              {mineOpen && serverConversations!.map(conv => (
-                <ConvItem key={conv.id} conv={conv} active={conv.id === activeConvId} onSelect={() => onSelectConversation(conv.id)} onToggleFavorite={() => { /* 服务端会话收藏 M2 接 */ }} />
-              ))}
-            </>
-          )}
           {favorites.length > 0 && (
             <>
               {sectionLabel("收藏对话", favOpen, () => setFavOpen(v => !v), favorites.length)}
               {favOpen && favorites.map(conv => (
-                <ConvItem key={conv.id} conv={conv} active={conv.id === activeConvId} onSelect={() => onSelectConversation(conv.id)} onToggleFavorite={() => toggleFavorite(conv.id)} />
+                <ConvItem key={conv.id} conv={conv} active={conv.id === activeConvId} onSelect={() => onSelectConversation(conv.id)} onToggleFavorite={() => toggleFavorite(conv.id)}
+                  onRename={t => persistOverrides({ ...overrides, titles: { ...overrides.titles, [conv.id]: t } })} onDelete={() => handleMockDelete(conv.id)} />
+              ))}
+            </>
+          )}
+          {(serverConversations?.length ?? 0) > 0 && (
+            <>
+              {sectionLabel("我的对话", mineOpen, () => setMineOpen(v => !v), serverConversations!.length)}
+              {mineOpen && serverConversations!.map(conv => (
+                <ConvItem key={conv.id} conv={conv} active={conv.id === activeConvId} onSelect={() => onSelectConversation(conv.id)} onToggleFavorite={() => { /* 服务端会话收藏 M2 接 */ }}
+                  onRename={t => { void handleServerRename(conv.id, t); }} onDelete={() => { void handleServerDelete(conv.id); }} />
               ))}
             </>
           )}
 
           {sectionLabel("最近对话", recentOpen, () => setRecentOpen(v => !v), recent.length)}
           {recentOpen && recent.map(conv => (
-            <ConvItem key={conv.id} conv={conv} active={conv.id === activeConvId} onSelect={() => onSelectConversation(conv.id)} onToggleFavorite={() => toggleFavorite(conv.id)} />
+            <ConvItem key={conv.id} conv={conv} active={conv.id === activeConvId} onSelect={() => onSelectConversation(conv.id)} onToggleFavorite={() => toggleFavorite(conv.id)}
+              onRename={t => persistOverrides({ ...overrides, titles: { ...overrides.titles, [conv.id]: t } })} onDelete={() => handleMockDelete(conv.id)} />
           ))}
 
           {!filtered.length && (

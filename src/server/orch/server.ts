@@ -232,6 +232,52 @@ export async function createOrchHandler() {
       return true;
     }
 
+    // PATCH /conversations/:id —— 重命名（侧边栏「重命名」；归属校验同 messages）
+    const convByIdMatch = pathname.match(/^\/conversations\/([^/]+)$/);
+    if (req.method === "PATCH" && convByIdMatch) {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      const title = String(body.title ?? "").trim().slice(0, 50);
+      if (!title) { json(res, 400, { error: "标题不能为空" }); return true; }
+      const userKey = authPhone ?? (body.user_key ? String(body.user_key) : "anon");
+      const r = await db.query(
+        `UPDATE conversations SET title = $2 WHERE id = $1 AND user_key = $3 RETURNING id`,
+        [convByIdMatch[1]!, title, userKey],
+      );
+      if (!r.rows.length) { json(res, 403, { error: "无权操作或会话不存在" }); return true; }
+      json(res, 200, { ok: true });
+      return true;
+    }
+
+    // DELETE /conversations/:id —— 删除会话及其消息/运行/事件（侧边栏「删除」；归属校验同上）
+    if (req.method === "DELETE" && convByIdMatch) {
+      await readBody(req).catch(() => "");
+      const userKey = authPhone ?? (new URL(req.url || "/", "http://local").searchParams.get("user_key") ?? "anon");
+      const client = await db.connect();
+      try {
+        await client.query("BEGIN");
+        const conv = await client.query(`SELECT id FROM conversations WHERE id = $1 AND user_key = $2`, [convByIdMatch[1]!, userKey]);
+        if (!conv.rows.length) {
+          await client.query("ROLLBACK");
+          json(res, 403, { error: "无权操作或会话不存在" });
+          return true;
+        }
+        await client.query(`DELETE FROM agent_events WHERE conv_id = $1`, [convByIdMatch[1]!]);
+        await client.query(`DELETE FROM model_calls WHERE run_id IN (SELECT id FROM agent_runs WHERE conv_id = $1)`, [convByIdMatch[1]!]);
+        await client.query(`DELETE FROM agent_tasks WHERE run_id IN (SELECT id FROM agent_runs WHERE conv_id = $1)`, [convByIdMatch[1]!]);
+        await client.query(`DELETE FROM agent_runs WHERE conv_id = $1`, [convByIdMatch[1]!]);
+        await client.query(`DELETE FROM messages WHERE conv_id = $1`, [convByIdMatch[1]!]);
+        await client.query(`DELETE FROM conversations WHERE id = $1`, [convByIdMatch[1]!]);
+        await client.query("COMMIT");
+        json(res, 200, { ok: true });
+      } catch (e: any) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        json(res, 500, { error: String(e?.message || e) });
+      } finally {
+        client.release();
+      }
+      return true;
+    }
+
     // GET /runs/:id/audit —— 全链路审计导出（政务留痕：run + tasks + 事件时间线）
     const auditMatch = pathname.match(/^\/runs\/([^/]+)\/audit$/);
     if (req.method === "GET" && auditMatch) {

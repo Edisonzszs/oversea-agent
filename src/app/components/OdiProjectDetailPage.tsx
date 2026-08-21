@@ -68,7 +68,21 @@ function buildActivity(project: AssistProject): { icon: string; text: string; ti
 }
 
 // ── MaterialsPage ─────────────────────────────────────────
-function MaterialsPage({ project, onFiles, onAskAssistant, onDelete, onPreview }: {
+/** 建议上传材料清单（用户要求:上传前提示需要哪些文件） */
+const REQUIRED_MATERIALS = [
+  { name: "境外投资备案申请表（商务部门）", need: "必备" },
+  { name: "境外投资真实性承诺书", need: "必备" },
+  { name: "企业营业执照副本及章程", need: "必备" },
+  { name: "股东会或董事会决议", need: "必备" },
+  { name: "投资资金来源说明", need: "必备" },
+  { name: "境外投资项目核准/备案申请表（发改委）", need: "必备" },
+  { name: "境外项目可行性研究报告", need: "必备" },
+  { name: "投资合同或协议书（或意向书）", need: "建议" },
+  { name: "被投资公司简介（或商业计划书）", need: "建议" },
+  { name: "近期财务报表（审计报告）", need: "建议" },
+];
+
+function MaterialsPage({ project, onFiles, onAskAssistant, onDelete, onPreview, onValidate }: {
   project: AssistProject;
   onFiles: (files: FileList | File[]) => void;
   onAskAssistant?: (ctx: AssistantContext) => void;
@@ -76,10 +90,13 @@ function MaterialsPage({ project, onFiles, onAskAssistant, onDelete, onPreview }
   onDelete: (id: string) => void;
   /** 预览材料识别原文(按文件名匹配模拟文档) */
   onPreview: (m: AssistMaterialFile) => void;
+  /** 开始智能校验(与校验中心同入口) */
+  onValidate: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locked = project.status === "材料校验中"; // 校验中锁定上传（流程文档 §7.5）
   const rows = project.materials;
+  const needValidate = project.status === "待校验"; // 上传后尚未校验
 
   const pick = () => { if (!locked) fileInputRef.current?.click(); };
 
@@ -109,6 +126,39 @@ function MaterialsPage({ project, onFiles, onAskAssistant, onDelete, onPreview }
         </div>
         <div style={{ fontSize: 12, color: "#64748b" }}>支持 PDF、Word、Excel，单文件最大 50MB</div>
       </div>
+
+      {/* 建议上传材料清单:提示需要哪些文件 */}
+      <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e8edf5", padding: "16px 18px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2.2v4.6c0 3.1-2.4 5.5-5.5 6.7-3.1-1.2-5.5-3.6-5.5-6.7V3.7L8 1.5z" stroke="#1a5bc6" strokeWidth="1.3" strokeLinejoin="round"/></svg>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#1f2937" }}>需要上传哪些文件</span>
+          <span style={{ fontSize: 11, color: "#9ca3af" }}>按商务委 / 发改委备案要求整理，必备项缺失将影响校验结论</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
+          {REQUIRED_MATERIALS.map(m => (
+            <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#374151" }}>
+              <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, color: m.need === "必备" ? "#b45309" : "#475569", background: m.need === "必备" ? "#fef3c7" : "#f1f5f9", border: `1px solid ${m.need === "必备" ? "#fde68a" : "#e2e8f0"}` }}>{m.need}</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 上传后校验提示 + 校验按钮(用户要求:上传后要提示需要校验) */}
+      {needValidate && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><path d="M8 1.5l7 12.5H1L8 1.5z" stroke="#d97706" strokeWidth="1.4" strokeLinejoin="round"/><path d="M8 6v3.2M8 11.2v.1" stroke="#d97706" strokeWidth="1.4" strokeLinecap="round"/></svg>
+          <span style={{ flex: 1, fontSize: 12.5, color: "#92400e", lineHeight: 1.6 }}>
+            已上传 <strong>{project.materials.length}</strong> 份材料，尚未进行智能校验——校验通过后系统才能识别字段、发现问题并生成材料。
+          </span>
+          <button onClick={onValidate}
+            style={{ padding: "7px 18px", borderRadius: 8, border: "none", background: "#d97706", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#b45309")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#d97706")}
+          >开始智能校验</button>
+        </div>
+      )}
+
       <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e8edf5", overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -494,7 +544,7 @@ function ReviewPage({ project, validation, resolvedChecks, resolvedKey, onToggle
           {activeDept} · {filtered.length} 个问题
         </div>
         {filtered.length > 0 && (
-          <button onClick={() => onAskAssistant?.({ type: "project", projectId: project.id, projectName: project.name })}
+          <button onClick={() => onAskAssistant?.({ type: "validation", projectId: project.id, projectName: project.name, issues: filtered.map(i => ({ field: i.field, department: i.dept, conclusion: i.conclusion, evidence: i.evidence, suggestion: i.suggestion })) })}
             style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 12, color: "#1a5bc6", cursor: "pointer" }}>
             问沪航者如何处理这些问题
           </button>
@@ -523,7 +573,7 @@ function ReviewPage({ project, validation, resolvedChecks, resolvedKey, onToggle
                     <button onClick={() => onLocate(issue.raw)}
                       style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #fde68a", background: "#fffbeb", fontSize: 11.5, color: "#92400e", cursor: "pointer", fontWeight: 600 }}>📄 原文出处</button>
                   )}
-                  <button onClick={() => onAskAssistant?.({ type: "project", projectId: project.id, projectName: project.name })}
+                  <button onClick={() => onAskAssistant?.({ type: "issue", projectId: project.id, projectName: project.name, issueId: issue.id, issueName: issue.field, department: issue.dept, field: issue.field, conclusion: issue.conclusion, evidence: issue.evidence, suggestion: issue.suggestion })}
                     style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 11.5, color: "#1a5bc6", cursor: "pointer" }}>问沪航者如何处理</button>
                   <button onClick={() => onToggleResolved(issue.id)} title="线下整改完成后标记,重新校验时不再计入"
                     style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #bbf7d0", background: "#f0fdf4", fontSize: 11.5, color: "#15803d", cursor: "pointer", fontWeight: 600 }}>✓ 标记已处理</button>
@@ -920,10 +970,15 @@ function OverviewPage({ project, validation, onTab, onStartValidation, onAskAssi
   const stepStatuses: StepStatus[] = progressFromStatus(project.status);
   const activity = buildActivity(project);
   // 关键待办 = 校验引擎实算问题 Top3（原先写死 3 条越南项目的假待办）
+  // 每条同时携带字段/结论/当前值/建议,「问沪航者」时带入右侧伴填(去写死)
   const todos = getIssues(validation).slice(0, 3).map(c => ({
     text: `${c.field} — ${c.suggestion}`,
     issueId: c.id,
     dept: deptLabel(c.domain),
+    field: c.field,
+    conclusion: c.status,
+    evidence: c.evidence,
+    suggestion: c.suggestion,
     urgent: c.status === "不通过",
   }));
 
@@ -978,7 +1033,7 @@ function OverviewPage({ project, validation, onTab, onStartValidation, onAskAssi
             <div key={todo.issueId} style={{ display: "flex", alignItems: "flex-start", gap: 8, paddingBottom: i < arr.length - 1 ? 10 : 0, marginBottom: i < arr.length - 1 ? 10 : 0, borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: todo.urgent ? "#dc2626" : "#f59e0b", flexShrink: 0, marginTop: 4 }} />
               <span style={{ fontSize: 12, color: "#374151", flex: 1, lineHeight: 1.5 }}>{todo.text}</span>
-              <button onClick={() => onAskAssistant?.({ type: "issue", projectId: project.id, projectName: project.name, issueId: todo.issueId, issueName: todo.text, department: todo.dept })}
+              <button onClick={() => onAskAssistant?.({ type: "issue", projectId: project.id, projectName: project.name, issueId: todo.issueId, issueName: todo.text, department: todo.dept, field: todo.field, conclusion: todo.conclusion, evidence: todo.evidence, suggestion: todo.suggestion })}
                 style={{ padding: "3px 9px", borderRadius: 6, border: "1px solid #bfdbfe", background: "#eff6ff", fontSize: 10, color: "#1a5bc6", cursor: "pointer", flexShrink: 0 }}>问沪航者</button>
             </div>
           ))}
@@ -1236,7 +1291,7 @@ export function OdiProjectDetailPage({ project, onUpdate, onBack, onGoToList, on
       {/* Content */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         {activeTab === "overview"   && <OverviewPage   project={project} validation={adjValidation} onTab={setActiveTab} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
-        {activeTab === "materials"  && <MaterialsPage  project={project} onFiles={handleFiles} onAskAssistant={onAskAssistant} onDelete={handleDeleteMaterial} onPreview={setPreviewMat} />}
+        {activeTab === "materials"  && <MaterialsPage  project={project} onFiles={handleFiles} onAskAssistant={onAskAssistant} onDelete={handleDeleteMaterial} onPreview={setPreviewMat} onValidate={runValidation} />}
         {activeTab === "review"     && <ReviewPage     project={project} validation={adjValidation} resolvedChecks={resolvedChecks} resolvedKey={resolvedKey} onToggleResolved={toggleResolved} onLocate={setLocateCheck} onStartValidation={runValidation} onAskAssistant={onAskAssistant} />}
         {activeTab === "generate"   && <GeneratePage   project={project} adjIssueCount={adjValidation.summaries.reduce((a, s) => a + s.failed + s.missing, 0)} docUrls={docUrls} genBusy={genBusy} onGenerate={handleGenerateDoc} onDownload={handleDownloadDoc} onPreview={setPreviewGen} onAskAssistant={onAskAssistant} />}
       </div>

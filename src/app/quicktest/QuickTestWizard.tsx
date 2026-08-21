@@ -157,8 +157,8 @@ export function QuickTestWizard({ onUpgrade, onBackHome }: Props) {
               {/* 报告(步骤7,navy 输出物风格保持) */}
               {step === 7 && <QuickTestReport answers={answers} onUpgrade={() => onUpgrade(answers)} onBack={() => setStep(6)} />}
 
-              {/* 底部导航(照 ComplianceWizard:error 红条 + ghost/primary) */}
-              {step < 7 && (
+              {/* 底部导航(使用说明步骤隐藏:说明卡内已有「开始自查」按钮,避免两个开始按钮) */}
+              {step >= 1 && step < 7 && (
                 <>
                   {err && (
                     <div style={{ marginTop: 12, background: C.badBg, border: `1px solid ${C.badBorder}`, borderRadius: 8, padding: "9px 14px", fontSize: 13, color: C.bad }}>
@@ -166,12 +166,10 @@ export function QuickTestWizard({ onUpgrade, onBackHome }: Props) {
                     </div>
                   )}
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
-                    {step > 0 ? (
-                      <button onClick={prev} style={{ background: "none", border: `1px solid ${C.primaryBorder}`, color: C.primary, borderRadius: 8, padding: "9px 24px", fontSize: 14, cursor: "pointer" }}>上一步</button>
-                    ) : <span />}
+                    <button onClick={prev} style={{ background: "none", border: `1px solid ${C.primaryBorder}`, color: C.primary, borderRadius: 8, padding: "9px 24px", fontSize: 14, cursor: "pointer" }}>上一步</button>
                     <button onClick={step === 6 ? () => { const e = validateStep(6, answers); if (e) { setErr(e); return; } setStep(7); } : next}
                       style={{ background: C.primary, color: "#fff", border: "none", borderRadius: 8, padding: "10px 32px", fontSize: 14, fontWeight: 600, cursor: "pointer", letterSpacing: 1 }}>
-                      {step === 0 ? "开始自查" : step === 6 ? "生成自查报告" : "下一步"}
+                      {step === 6 ? "生成自查报告" : "下一步"}
                     </button>
                   </div>
                 </>
